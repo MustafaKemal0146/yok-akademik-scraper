@@ -420,15 +420,16 @@ class YOKScraper:
                         
                         # Yayın yeri bilgisini bul
                         if "Yayın Yeri:" in full_text:
-                            pub_info = full_text.split("Yayın Yeri:")[1].strip()
-                            publication_info = pub_info.split('\n')[0].strip()
-                            
-                            # Yazarları, yılı ve tür bilgisini temizle
-                            publication_info = publication_info.replace(authors, '').strip()
-                            publication_info = re.sub(r'\b(19|20)\d{2}\b', '', publication_info).strip()
-                            publication_info = re.sub(r'Tam metin bildiri', '', publication_info, flags=re.IGNORECASE).strip()
-                            publication_info = re.sub(r'[,\s]+$', '', publication_info)
-                            publication_info = publication_info.strip(' ,:()[]')
+                            pub_text = full_text.split("Yayın Yeri:")[1]
+                            # Yıl veya etiketlerden önceki kısmı al (parantezleri de kapsayacak şekilde)
+                            pub_match = re.search(r'(.*?)(?=,\s*(?:19|20)\d{2}|$|\n|<p>)', pub_text)
+                            if pub_match:
+                                publication_info = pub_match.group(1).strip()
+                                # Gereksiz karakterleri temizle ama parantezleri koru
+                                publication_info = re.sub(r'[,\s]+$', '', publication_info)
+                                publication_info = publication_info.strip(' :,')
+                            else:
+                                publication_info = pub_text.strip()
                         else:
                             publication_info = ""
                         
