@@ -22,29 +22,43 @@ class YOKScraper:
         Args:
             url: Akademisyenin YÖK profil URL'i
         """
+        if not url.startswith("https://akademik.yok.gov.tr/"):
+            raise ValueError("Geçersiz YÖK Akademik URL'i")
         self.url = url
         self.driver = None
         self.wait = None
         
+    def __del__(self):
+        """Destructor: Kaynakları temizle"""
+        if self.driver:
+            try:
+                self.driver.quit()
+            except:
+                pass
+        
     def setup_driver(self):
         """Selenium webdriver'ı başlatır ve gerekli ayarları yapar"""
-        options = webdriver.ChromeOptions()
-        options.add_argument('--headless')
-        options.add_argument('--disable-gpu')
-        options.add_argument('--no-sandbox')
-        options.add_argument('--disable-dev-shm-usage')
-        options.add_argument('--window-size=1920,1080')
-        options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
-        
-        # Performans optimizasyonları
-        options.add_argument('--disable-extensions')
-        options.add_argument('--disable-infobars')
-        options.add_argument('--disable-notifications')
-        options.add_argument('--disable-popup-blocking')
-        options.add_argument('--blink-settings=imagesEnabled=false')  # Resimleri devre dışı bırak
-        
-        self.driver = webdriver.Chrome(options=options)
-        self.wait = WebDriverWait(self.driver, 10)  # 30 yerine 10 saniye
+        try:
+            options = webdriver.ChromeOptions()
+            options.add_argument('--headless')
+            options.add_argument('--disable-gpu')
+            options.add_argument('--no-sandbox')
+            options.add_argument('--disable-dev-shm-usage')
+            options.add_argument('--window-size=1920,1080')
+            options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+            
+            # Performans optimizasyonları
+            options.add_argument('--disable-extensions')
+            options.add_argument('--disable-infobars')
+            options.add_argument('--disable-notifications')
+            options.add_argument('--disable-popup-blocking')
+            options.add_argument('--blink-settings=imagesEnabled=false')  # Resimleri devre dışı bırak
+            
+            self.driver = webdriver.Chrome(options=options)
+            self.wait = WebDriverWait(self.driver, 10)  # 30 yerine 10 saniye
+        except Exception as e:
+            print(f"Chrome sürücüsü başlatılamadı: {e}")
+            raise  # Kritik hata olduğu için yeniden yükselt
         
     def _get_element_text(self, element, selector: str) -> str:
         """CSS seçici ile element metnini al (Cache'li)"""
@@ -141,45 +155,80 @@ class YOKScraper:
             list: Kitap bilgilerini içeren liste
         """
         try:
-            # Kitaplar sekmesine tıkla
             books_tab = self.wait.until(EC.element_to_be_clickable(
                 (By.CSS_SELECTOR, "li#booksMenu a")))
             books_tab.click()
-            time.sleep(5)
+            
+            # Sabit bekleme yerine dinamik bekleme
+            self.wait.until(EC.presence_of_element_located(
+                (By.CSS_SELECTOR, "div.container-fluid div.row div")))
             
             books = []
-            book_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.projects div.row")
             
-            for book in book_elements:
+            # Ana kitap container'ı
+            book_container = self.driver.find_element(
+                By.CSS_SELECTOR, 
+                "div.col-lg-10.col-md-10.col-sm-12.col-xs-12 > div.container-fluid > div.row > div"
+            )
+            
+            # Kitap elementleri - doğrudan div.projects altındaki div'leri al
+            book_elements = book_container.find_elements(By.CSS_SELECTOR, "div.projects > div")
+            
+            pbar = tqdm(book_elements, desc="Kitaplar çekiliyor", unit="kitap")
+            
+            for book in pbar:
                 try:
+                    # Başlık - strong elementi içinde
                     title = book.find_element(By.CSS_SELECTOR, "strong").text.strip()
-                    info = book.find_element(By.CSS_SELECTOR, "p").text.strip()
+                    
+                    # Detay bilgileri - p elementi içinde
+                    info_text = book.find_element(By.CSS_SELECTOR, "p").text.strip()
+                    
+                    # Yazarlar - virgülle ayrılmış ilk kısım
+                    authors = info_text.split("Yayın Yeri:")[0].strip()
+                    
+                    # Diğer bilgiler
+                    publisher = ""
+                    edition = ""
+                    pages = ""
+                    isbn = ""
+                    year = ""
                     
                     # Bilgileri parçala
-                    info_parts = info.split(',')
-                    authors = info_parts[0].strip()
-                    publisher = next((part.split(':')[1].strip() for part in info_parts if 'Yayın Yeri' in part), '')
-                    
-                    # Yıl bilgisini label-info class'ından çek
-                    year = ''
-                    try:
-                        year_element = book.find_element(By.CSS_SELECTOR, "span.label.label-info")
-                        if year_element:
-                            year = year_element.text.strip()
-                    except:
-                        pass
+                    info_parts = info_text.split(",")
+                    for part in info_parts:
+                        part = part.strip()
+                        if "Yayın Yeri:" in part:
+                            publisher = part.split("Yayın Yeri:")[1].strip()
+                        elif "Basım sayısı:" in part:
+                            edition = part.split("Basım sayısı:")[1].strip()
+                        elif "Sayfa sayısı:" in part:
+                            pages = part.split("Sayfa sayısı:")[1].strip()
+                        elif "ISBN:" in part:
+                            isbn = part.split("ISBN:")[1].strip()
+                        # Yıl için 4 haneli sayı kontrolü
+                        elif re.search(r'\b(19|20)\d{2}\b', part):
+                            year = re.search(r'\b(19|20)\d{2}\b', part).group()
                     
                     book_info = {
                         'title': title,
                         'authors': authors,
                         'publisher': publisher,
-                        'year': year
+                        'year': year,
+                        'edition': edition,
+                        'pages': pages,
+                        'isbn': isbn
                     }
                     books.append(book_info)
-                except:
+                    
+                    pbar.set_description(f"Kitap işleniyor: {title[:30]}...")
+                    
+                except Exception as e:
+                    print(f"Kitap bilgisi çekilirken hata: {e}")
                     continue
-                
+            
             return books
+            
         except Exception as e:
             print(f"Kitaplar çekilirken hata: {e}")
             return []
@@ -273,7 +322,10 @@ class YOKScraper:
             proceedings_tab = self.wait.until(EC.element_to_be_clickable(
                 (By.CSS_SELECTOR, "li#proceedingMenu a")))
             proceedings_tab.click()
-            time.sleep(5)
+            
+            # Sabit bekleme yerine dinamik bekleme
+            self.wait.until(EC.presence_of_element_located(
+                (By.CSS_SELECTOR, "div.tab-content div.tab-pane.active tr")))
             
             proceedings = []
             proceeding_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.tab-content div.tab-pane.active tr")
@@ -285,25 +337,72 @@ class YOKScraper:
                     # Başlık
                     title = proceeding.find_element(By.CSS_SELECTOR, "strong").text.strip()
                     
-                    # Yazarlar
-                    author_elements = proceeding.find_elements(By.CSS_SELECTOR, "a.popoverData")
-                    authors = ', '.join(author.text.strip() for author in author_elements)
+                    # Yazarlar - Kombine yöntem
+                    try:
+                        # 1. Yöntem: popoverData elementleri
+                        author_elements = proceeding.find_elements(By.CSS_SELECTOR, "a.popoverData")
+                        popover_authors = [author.text.strip() for author in author_elements if author.text.strip()]
+                        
+                        # 2. Yöntem: Normal metin yazarları
+                        td_text = proceeding.find_element(By.CSS_SELECTOR, "td").text
+                        text_after_title = td_text.split(title)[1] if title in td_text else td_text
+                        text_before_pub = text_after_title.split("Yayın Yeri:")[0] if "Yayın Yeri:" in text_after_title else text_after_title
+                        
+                        # Parantez içi tarihleri temizle
+                        text_before_pub = re.sub(r'\(\d{2}\.\d{2}\.\d{4}\s*-\s*\d{2}\.\d{2}\.\d{4}\s*\)', '', text_before_pub)
+                        
+                        # Virgülle ayır ve temizle
+                        text_authors = [a.strip() for a in text_before_pub.split(',') if a.strip() and len(a.strip()) > 2]
+                        
+                        # İki listeyi birleştir ve tekrar edenleri kaldır
+                        all_authors = []
+                        for author in text_authors + popover_authors:
+                            if author not in all_authors:
+                                all_authors.append(author)
+                        
+                        authors = ', '.join(all_authors)
+                        
+                    except Exception as e:
+                        print(f"Yazar ayrıştırma hatası: {e}")
+                        authors = ""
                     
-                    # Yayın yeri ve yıl - yeni yöntem
+                    # Tür bilgisi - Genişletilmiş arama
+                    try:
+                        proceeding_type = ""
+                        # Önce label elementlerini kontrol et
+                        type_elements = proceeding.find_elements(By.CSS_SELECTOR, "span.label")
+                        for element in type_elements:
+                            if any(type_text in element.text.lower() for type_text in ["tam metin", "özet", "bildiri"]):
+                                proceeding_type = element.text.strip()
+                                break
+                        
+                        # Eğer bulunamadıysa tüm metinde ara
+                        if not proceeding_type:
+                            full_text = proceeding.text.lower()
+                            if "tam metin bildiri" in full_text:
+                                proceeding_type = "Tam metin bildiri"
+                            elif "özet bildiri" in full_text:
+                                proceeding_type = "Özet bildiri"
+                            elif "bildiri" in full_text:
+                                proceeding_type = "Bildiri"
+                    
+                    except Exception as e:
+                        print(f"Tür bilgisi çekme hatası: {e}")
+                        proceeding_type = ""
+                    
+                    # Yayın yeri ve yıl
                     try:
                         full_text = proceeding.text.strip()
                         
                         # Yayın yeri bilgisini bul
                         if "Yayın Yeri:" in full_text:
                             pub_info = full_text.split("Yayın Yeri:")[1].strip()
-                            # İlk satırı al (yayın yeri genelde ilk satırda)
                             publication_info = pub_info.split('\n')[0].strip()
                             
                             # Yazarları, yılı ve tür bilgisini temizle
                             publication_info = publication_info.replace(authors, '').strip()
                             publication_info = re.sub(r'\b(19|20)\d{2}\b', '', publication_info).strip()
                             publication_info = re.sub(r'Tam metin bildiri', '', publication_info, flags=re.IGNORECASE).strip()
-                            # Gereksiz karakterleri temizle
                             publication_info = re.sub(r'[,\s]+$', '', publication_info)
                             publication_info = publication_info.strip(' ,:()[]')
                         else:
@@ -318,14 +417,6 @@ class YOKScraper:
                         publication_info = ""
                         year = ""
                     
-                    # Tür bilgisi
-                    proceeding_type = ""
-                    type_elements = proceeding.find_elements(By.CSS_SELECTOR, "span.label")
-                    for element in type_elements:
-                        if "Tam metin bildiri" in element.text:
-                            proceeding_type = element.text.strip()
-                            break
-                    
                     proceeding_info = {
                         'title': title,
                         'authors': authors,
@@ -336,6 +427,11 @@ class YOKScraper:
                     proceedings.append(proceeding_info)
                     
                     pbar.set_description(f"Bildiri işleniyor: {title[:30]}...")
+                    
+                    # Her 100 bildiriden sonra belleği temizle
+                    if len(proceedings) % 100 == 0:
+                        import gc
+                        gc.collect()
                     
                 except Exception as e:
                     print(f"Bildiri bilgisi çekilirken hata: {e}")
@@ -514,41 +610,44 @@ class YOKScraper:
         """
         try:
             self.setup_driver()
-            
-            # Ana progress bar
-            with tqdm(total=6, desc="Veriler çekiliyor") as pbar:
-                pbar.set_description("Akademik bilgiler çekiliyor")
-                academic_info = self.get_academic_info()
-                pbar.update(1)
-                
-                pbar.set_description("Kitaplar çekiliyor")
-                books = self.get_books()
-                pbar.update(1)
-                
-                pbar.set_description("Makaleler çekiliyor")
-                articles = self.get_articles()
-                pbar.update(1)
-                
-                pbar.set_description("Bildiriler çekiliyor")
-                proceedings = self.get_proceedings()
-                pbar.update(1)
-                
-                results = {
-                    'academic_info': academic_info,
-                    'books': books,
-                    'articles': articles,
-                    'proceedings': proceedings
-                }
-                
-                pbar.set_description("Word dosyası oluşturuluyor")
-                self.save_to_word(results)
-                pbar.update(1)
-                
-                pbar.set_description("JSON dosyası oluşturuluyor")
-                self.save_to_json(results)
-                pbar.update(1)
-                
-                pbar.set_description("İşlem tamamlandı!")
+            total_steps = 6
+            with tqdm(total=total_steps, desc="Veriler çekiliyor") as pbar:
+                try:
+                    pbar.set_description("Akademik bilgiler çekiliyor")
+                    academic_info = self.get_academic_info()
+                    pbar.update(1)
+                    
+                    pbar.set_description("Kitaplar çekiliyor")
+                    books = self.get_books()
+                    pbar.update(1)
+                    
+                    pbar.set_description("Makaleler çekiliyor")
+                    articles = self.get_articles()
+                    pbar.update(1)
+                    
+                    pbar.set_description("Bildiriler çekiliyor")
+                    proceedings = self.get_proceedings()
+                    pbar.update(1)
+                    
+                    results = {
+                        'academic_info': academic_info,
+                        'books': books,
+                        'articles': articles,
+                        'proceedings': proceedings
+                    }
+                    
+                    pbar.set_description("Word dosyası oluşturuluyor")
+                    self.save_to_word(results)
+                    pbar.update(1)
+                    
+                    pbar.set_description("JSON dosyası oluşturuluyor")
+                    self.save_to_json(results)
+                    pbar.update(1)
+                    
+                    pbar.set_description("İşlem tamamlandı!")
+                except Exception as e:
+                    print(f"Veri çekme hatası: {e}")
+                    pbar.update(total_steps - pbar.n)  # Kalan adımları tamamla
             
             return results
         finally:
@@ -627,6 +726,14 @@ class YOKScraper:
             data: Kaydedilecek veriler
             filename: Kaydedilecek dosya adı
         """
+        if not data:
+            print("Kaydedilecek veri bulunamadı!")
+            return
+        
+        if not isinstance(data, dict):
+            print("Geçersiz veri formatı!")
+            return
+        
         doc = Document()
         
         # Başlık stilini ayarla
@@ -643,14 +750,14 @@ class YOKScraper:
                     doc.add_paragraph(duty)
             doc.add_page_break()
             
-            # Öğrenim Bilgileri
+            # Öğrenim Bilgileri (ayrı sayfada)
             doc.add_heading('Öğrenim Bilgileri', level=1)
             if 'education' in data['academic_info']:
                 for edu in data['academic_info']['education']:
                     doc.add_paragraph(edu)
             doc.add_page_break()
         
-        # Kitaplar
+        # Kitaplar (ayrı sayfada)
         if 'books' in data and data['books']:
             doc.add_heading('Kitaplar', level=1)
             for book in data['books']:
@@ -658,8 +765,14 @@ class YOKScraper:
                 p.add_run(f"Başlık: {book['title']}").bold = True
                 p.add_run(f"\nYazarlar: {book['authors']}")
                 p.add_run(f"\nYayınevi: {book['publisher']}")
-                if 'year' in book:
+                if book['year']:
                     p.add_run(f"\nYıl: {book['year']}")
+                if book['edition']:
+                    p.add_run(f"\nBasım sayısı: {book['edition']}")
+                if book['pages']:
+                    p.add_run(f"\nSayfa sayısı: {book['pages']}")
+                if book['isbn']:
+                    p.add_run(f"\nISBN: {book['isbn']}")
                 doc.add_paragraph()
             doc.add_page_break()
         
@@ -693,7 +806,7 @@ class YOKScraper:
         
         # Dosyayı kaydet
         doc.save(filename)
-        print(f"Word dosyası başarıyla oluşturuldu: {filename}") 
+        print(f"Word dosyası başarıyla oluşturuldu: {filename}")
 
     def save_to_json(self, data, filename='academic_info.json'):
         """
@@ -716,10 +829,14 @@ class YOKScraper:
                 'proceedings': data.get('proceedings', [])
             }
             
+            # Dosyayı çalışılan dizine kaydet
+            current_dir = os.getcwd()
+            file_path = os.path.join(current_dir, filename)
+            
             # JSON dosyasına kaydet (Türkçe karakterleri düzgün göstermek için ensure_ascii=False)
-            with open(filename, 'w', encoding='utf-8') as f:
+            with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(json_data, f, ensure_ascii=False, indent=4)
                 
-            print(f"JSON dosyası başarıyla oluşturuldu: {filename}")
+            print(f"JSON dosyası başarıyla oluşturuldu: {file_path}")
         except Exception as e:
-            print(f"JSON dosyası oluşturulurken hata: {e}") 
+            print(f"JSON dosyası kaydedilemedi: {e}") 
