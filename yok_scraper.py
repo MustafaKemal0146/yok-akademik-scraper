@@ -12,6 +12,7 @@ import os
 from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from tqdm import tqdm
 
 class YOKScraper:
     def __init__(self, url):
@@ -27,16 +28,30 @@ class YOKScraper:
     def setup_driver(self):
         """Selenium webdriver'ı başlatır ve gerekli ayarları yapar"""
         options = webdriver.ChromeOptions()
-        options.add_argument('--headless')  # Tarayıcıyı arka planda çalıştır
+        options.add_argument('--headless')
         options.add_argument('--disable-gpu')
         options.add_argument('--no-sandbox')
         options.add_argument('--disable-dev-shm-usage')
         options.add_argument('--window-size=1920,1080')
-        options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+        options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+        
+        # Performans optimizasyonları
+        options.add_argument('--disable-extensions')
+        options.add_argument('--disable-infobars')
+        options.add_argument('--disable-notifications')
+        options.add_argument('--disable-popup-blocking')
+        options.add_argument('--blink-settings=imagesEnabled=false')  # Resimleri devre dışı bırak
         
         self.driver = webdriver.Chrome(options=options)
-        self.wait = WebDriverWait(self.driver, 30)  # 30 saniye bekle
+        self.wait = WebDriverWait(self.driver, 10)  # 30 yerine 10 saniye
         
+    def _get_element_text(self, element, selector: str) -> str:
+        """CSS seçici ile element metnini al (Cache'li)"""
+        try:
+            return element.find_element(By.CSS_SELECTOR, selector).text.strip()
+        except:
+            return ""
+
     def get_academic_info(self):
         """
         Akademisyenin görev ve öğrenim bilgilerini çeker
@@ -144,10 +159,20 @@ class YOKScraper:
                     authors = info_parts[0].strip()
                     publisher = next((part.split(':')[1].strip() for part in info_parts if 'Yayın Yeri' in part), '')
                     
+                    # Yıl bilgisini label-info class'ından çek
+                    year = ''
+                    try:
+                        year_element = book.find_element(By.CSS_SELECTOR, "span.label.label-info")
+                        if year_element:
+                            year = year_element.text.strip()
+                    except:
+                        pass
+                    
                     book_info = {
                         'title': title,
                         'authors': authors,
-                        'publisher': publisher
+                        'publisher': publisher,
+                        'year': year
                     }
                     books.append(book_info)
                 except:
@@ -167,61 +192,72 @@ class YOKScraper:
         try:
             # Makaleler sekmesine tıkla
             articles_tab = self.wait.until(EC.element_to_be_clickable(
-                (By.CSS_SELECTOR, "li#articleMenu a")))
+                (By.CSS_SELECTOR, "li#articlesMenu a")))
             articles_tab.click()
-            print("Makaleler sekmesine tıklandı")
             time.sleep(5)
             
             articles = []
-            article_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.tab-content div.tab-pane.active tr")
-            print(f"Bulunan makale sayısı: {len(article_elements)}")
+            article_elements = self.driver.find_elements(By.CSS_SELECTOR, "tbody.searchable tr")
             
             for article in article_elements:
                 try:
                     # Başlık
-                    title = article.find_element(By.CSS_SELECTOR, "strong").text.strip()
+                    title = article.find_element(By.CSS_SELECTOR, "span.baslika strong a").text.strip()
                     
-                    # Yazarlar - popoverData class'ına sahip a etiketlerini bul
-                    author_elements = article.find_elements(By.CSS_SELECTOR, "a.popoverData")
-                    authors = ', '.join([author.text.strip() for author in author_elements])
+                    # Yazar ve yayın yeri bilgilerini içeren metin
+                    info_text = article.find_element(By.CSS_SELECTOR, "td").text.strip()
                     
-                    # Yayın bilgileri
-                    pub_info = article.find_element(By.CSS_SELECTOR, "td p:last-of-type").text.strip()
-                    pub_parts = pub_info.split(',')
+                    # Yazarlar ve yayın yeri bilgisini ayır
+                    if ", Yayın Yeri:" in info_text:
+                        authors_part, pub_part = info_text.split(", Yayın Yeri:")
+                        authors = authors_part.strip()
+                        
+                        # Yayın yeri ve yıl bilgisini ayır
+                        pub_lines = pub_part.strip().split('\n')
+                        pub_info = pub_lines[0].strip()
+                        
+                        # Son virgülden sonraki kısım yıl bilgisi
+                        if ',' in pub_info:
+                            publication_place, year = pub_info.rsplit(',', 1)
+                            publication_place = publication_place.strip()
+                            year = year.strip()
+                        else:
+                            publication_place = pub_info
+                            year = ""
+                    else:
+                        authors = info_text
+                        publication_place = ""
+                        year = ""
                     
-                    # Dergi adı
-                    journal = next((part.split(':')[1].strip() for part in pub_parts if 'Yayın Yeri:' in part), '')
+                    # Etiketleri al
+                    labels = []
+                    label_elements = article.find_elements(By.CSS_SELECTOR, "span.label")
+                    for label in label_elements:
+                        labels.append(label.text.strip())
                     
-                    # Yıl
-                    year = next((part.strip() for part in pub_parts if part.strip().isdigit()), '')
-                    
-                    # Makale türü ve indeks
-                    labels = article.find_elements(By.CSS_SELECTOR, "span.label")
-                    article_type = ''
-                    index_type = ''
-                    
-                    for label in labels:
-                        if 'label-default' in label.get_attribute('class'):
-                            article_type = label.text.strip()
-                        elif 'label-success' in label.get_attribute('class'):
-                            index_type = label.text.strip()
+                    # DOI linkini al
+                    doi_link = ""
+                    try:
+                        doi_element = article.find_element(By.CSS_SELECTOR, "a[href^='https://dx.doi.org']")
+                        doi_link = doi_element.get_attribute("href")
+                    except:
+                        pass
                     
                     article_info = {
                         'title': title,
                         'authors': authors,
-                        'journal': journal,
+                        'publication_place': publication_place,
                         'year': year,
-                        'type': article_type,
-                        'index': index_type
+                        'labels': labels,
+                        'doi': doi_link
                     }
                     articles.append(article_info)
                     
                 except Exception as e:
-                    print(f"Makale işlenirken hata: {e}")
+                    print(f"Makale bilgisi çekilirken hata: {e}")
                     continue
-                
-            return articles
             
+            return articles
         except Exception as e:
             print(f"Makaleler çekilirken hata: {e}")
             return []
@@ -233,7 +269,6 @@ class YOKScraper:
             list: Bildiri bilgilerini içeren liste
         """
         try:
-            # Bildiriler sekmesine tıkla
             proceedings_tab = self.wait.until(EC.element_to_be_clickable(
                 (By.CSS_SELECTOR, "li#proceedingMenu a")))
             proceedings_tab.click()
@@ -242,45 +277,71 @@ class YOKScraper:
             proceedings = []
             proceeding_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.tab-content div.tab-pane.active tr")
             
-            for proceeding in proceeding_elements:
+            pbar = tqdm(proceeding_elements, desc="Bildiriler çekiliyor", unit="bildiri")
+            
+            for proceeding in pbar:
                 try:
                     # Başlık
                     title = proceeding.find_element(By.CSS_SELECTOR, "strong").text.strip()
                     
-                    # Yazarlar - popoverData class'ına sahip a etiketlerini bul
+                    # Yazarlar
                     author_elements = proceeding.find_elements(By.CSS_SELECTOR, "a.popoverData")
-                    authors = ', '.join([author.text.strip() for author in author_elements])
+                    authors = ', '.join(author.text.strip() for author in author_elements)
                     
-                    # Konferans bilgileri
-                    pub_info = proceeding.find_element(By.CSS_SELECTOR, "td p:last-of-type").text.strip()
-                    pub_parts = pub_info.split(',')
+                    # Yayın yeri ve yıl - yeni yöntem
+                    info_text = proceeding.find_element(By.CSS_SELECTOR, "td").text.strip()
                     
-                    # Konferans adı
-                    conference = next((part.split(':')[1].strip() for part in pub_parts if 'Yayın Yeri:' in part), '')
+                    publication_place = ""
+                    year = ""
                     
-                    # Yıl
-                    year = next((part.strip() for part in pub_parts if part.strip().isdigit()), '')
+                    # "Yayın Yeri:" ifadesinden sonrasını al
+                    if "Yayın Yeri:" in info_text:
+                        pub_info = info_text.split("Yayın Yeri:")[1].strip()
+                        # Virgülle ayrılmış parçaları al
+                        parts = [p.strip() for p in pub_info.split(',')]
+                        
+                        for i, part in enumerate(parts):
+                            # Son parça ve 4 haneli sayı kontrolü
+                            if i == len(parts) - 1 and part.strip().isdigit() and len(part.strip()) == 4:
+                                year = part.strip()
+                                # Yayın yerini önceki parçalardan oluştur
+                                publication_place = ', '.join(parts[:-1]).strip()
+                                break
+                            # Eğer parça içinde 4 haneli yıl varsa
+                            elif any(p.strip().isdigit() and len(p.strip()) == 4 for p in part.split()):
+                                # Yılı bul
+                                for word in part.split():
+                                    if word.strip().isdigit() and len(word.strip()) == 4:
+                                        year = word.strip()
+                                        # Yayın yerini yıl hariç birleştir
+                                        pub_parts = parts[:i] + [part.replace(year, '').strip()]
+                                        publication_place = ', '.join(pub_parts).strip()
+                                        break
+                                break
                     
-                    # Bildiri türü bilgisini al
-                    labels = proceeding.find_elements(By.CSS_SELECTOR, "span.label")
-                    proceeding_type = ''
-                    
-                    for label in labels:
-                        if 'label-success' in label.get_attribute('class'):
-                            proceeding_type = label.text.strip()
+                    # Tür bilgisi
+                    proceeding_type = ""
+                    type_elements = proceeding.find_elements(By.CSS_SELECTOR, "span.label")
+                    for element in type_elements:
+                        if "Tam metin bildiri" in element.text:
+                            proceeding_type = element.text.strip()
+                            break
                     
                     proceeding_info = {
                         'title': title,
                         'authors': authors,
-                        'conference': conference.replace('Yayın Yeri:', '').strip(),
+                        'publication_place': publication_place.strip(' ,'),  # Sondaki virgül ve boşlukları temizle
                         'year': year,
                         'type': proceeding_type
                     }
                     proceedings.append(proceeding_info)
                     
+                    pbar.set_description(f"Bildiri işleniyor: {title[:30]}...")
+                    
                 except Exception as e:
+                    print(f"Bildiri bilgisi çekilirken hata: {e}")
                     continue
-                
+            
             return proceedings
             
         except Exception as e:
@@ -455,21 +516,40 @@ class YOKScraper:
         try:
             self.setup_driver()
             
-            results = {
-                'profile_info': self.get_profile_info(),
-                'academic_info': self.get_academic_info(),
-                'books': self.get_books(),
-                'articles': self.get_articles(),
-                'proceedings': self.get_proceedings()
-            }
-            
-            # Debug için verileri yazdır
-            print("\nÇekilen veriler:")
-            print("Profil Bilgileri:", results['profile_info'])
-            print("Akademik Bilgiler:", results['academic_info'])
-            print("\nKitaplar:", results['books'])
-            print("\nMakaleler:", results['articles'])
-            print("\nBildiriler:", results['proceedings'])
+            # Ana progress bar
+            with tqdm(total=6, desc="Veriler çekiliyor") as pbar:
+                pbar.set_description("Akademik bilgiler çekiliyor")
+                academic_info = self.get_academic_info()
+                pbar.update(1)
+                
+                pbar.set_description("Kitaplar çekiliyor")
+                books = self.get_books()
+                pbar.update(1)
+                
+                pbar.set_description("Makaleler çekiliyor")
+                articles = self.get_articles()
+                pbar.update(1)
+                
+                pbar.set_description("Bildiriler çekiliyor")
+                proceedings = self.get_proceedings()
+                pbar.update(1)
+                
+                results = {
+                    'academic_info': academic_info,
+                    'books': books,
+                    'articles': articles,
+                    'proceedings': proceedings
+                }
+                
+                pbar.set_description("Word dosyası oluşturuluyor")
+                self.save_to_word(results)
+                pbar.update(1)
+                
+                pbar.set_description("JSON dosyası oluşturuluyor")
+                self.save_to_json(results)
+                pbar.update(1)
+                
+                pbar.set_description("İşlem tamamlandı!")
             
             return results
         finally:
@@ -591,10 +671,12 @@ class YOKScraper:
                 p = doc.add_paragraph()
                 p.add_run(f"Başlık: {article['title']}").bold = True
                 p.add_run(f"\nYazarlar: {article['authors']}")
-                p.add_run(f"\nDergi: {article['journal']}")
+                p.add_run(f"\nYayın Yeri: {article['publication_place']}")
                 p.add_run(f"\nYıl: {article['year']}")
-                p.add_run(f"\nTür: {article['type']}")
-                p.add_run(f"\nİndeks: {article['index']}")
+                if 'labels' in article:
+                    p.add_run(f"\nEtiketler: {', '.join(article['labels'])}")
+                if 'doi' in article and article['doi']:
+                    p.add_run(f"\nDOI: {article['doi']}")
                 doc.add_paragraph()
             doc.add_page_break()
         
@@ -605,7 +687,7 @@ class YOKScraper:
                 p = doc.add_paragraph()
                 p.add_run(f"Başlık: {proc['title']}").bold = True
                 p.add_run(f"\nYazarlar: {proc['authors']}")
-                p.add_run(f"\nKonferans: {proc['conference']}")
+                p.add_run(f"\nYayın Yeri: {proc['publication_place']}")
                 p.add_run(f"\nYıl: {proc['year']}")
                 p.add_run(f"\nTür: {proc['type']}")
                 doc.add_paragraph()
@@ -613,3 +695,32 @@ class YOKScraper:
         # Dosyayı kaydet
         doc.save(filename)
         print(f"Word dosyası başarıyla oluşturuldu: {filename}") 
+
+    def save_to_json(self, data, filename='academic_info.json'):
+        """
+        Verileri JSON dosyasına kaydeder
+        Args:
+            data: Kaydedilecek veriler
+            filename: Kaydedilecek dosya adı
+        """
+        try:
+            import json
+            
+            # Verileri JSON formatına uygun hale getir
+            json_data = {
+                'academic_info': {
+                    'duties': data.get('academic_info', {}).get('duties', []),
+                    'education': data.get('academic_info', {}).get('education', [])
+                },
+                'books': data.get('books', []),
+                'articles': data.get('articles', []),
+                'proceedings': data.get('proceedings', [])
+            }
+            
+            # JSON dosyasına kaydet (Türkçe karakterleri düzgün göstermek için ensure_ascii=False)
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(json_data, f, ensure_ascii=False, indent=4)
+                
+            print(f"JSON dosyası başarıyla oluşturuldu: {filename}")
+        except Exception as e:
+            print(f"JSON dosyası oluşturulurken hata: {e}") 
