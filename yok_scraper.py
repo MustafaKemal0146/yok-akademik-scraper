@@ -40,37 +40,33 @@ class YOKScraper:
         """Selenium webdriver'ı başlatır ve gerekli ayarları yapar"""
         try:
             options = webdriver.ChromeOptions()
-            options.add_argument('--headless')
+            options.add_argument('--headless=new')  # Yeni headless modu
             options.add_argument('--disable-gpu')
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
             options.add_argument('--window-size=1920,1080')
-            options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
             
             # Hata ayıklama mesajlarını gizle
             options.add_experimental_option('excludeSwitches', ['enable-logging'])
-            options.add_argument('--log-level=3')  # Sadece kritik hataları göster
+            options.add_argument('--log-level=3')
             
             # Performans optimizasyonları
             options.add_argument('--disable-extensions')
             options.add_argument('--disable-infobars')
             options.add_argument('--disable-notifications')
-            options.add_argument('--disable-popup-blocking')
-            options.add_argument('--blink-settings=imagesEnabled=false')
             
-            self.driver = webdriver.Chrome(options=options)
+            # WebDriver yönetimini geliştir
+            from selenium.webdriver.chrome.service import Service
+            from webdriver_manager.chrome import ChromeDriverManager
+            
+            service = Service(ChromeDriverManager().install())
+            self.driver = webdriver.Chrome(service=service, options=options)
             self.wait = WebDriverWait(self.driver, 10)
+            
         except Exception as e:
             print(f"Chrome sürücüsü başlatılamadı: {e}")
             raise
         
-    def _get_element_text(self, element, selector: str) -> str:
-        """CSS seçici ile element metnini al (Cache'li)"""
-        try:
-            return element.find_element(By.CSS_SELECTOR, selector).text.strip()
-        except:
-            return ""
-
     def get_academic_info(self):
         """
         Akademisyenin görev ve öğrenim bilgilerini çeker
@@ -210,9 +206,16 @@ class YOKScraper:
                             pages = part.split("Sayfa sayısı:")[1].strip()
                         elif "ISBN:" in part:
                             isbn = part.split("ISBN:")[1].strip()
-                        # Yıl için 4 haneli sayı kontrolü
-                        elif re.search(r'\b(19|20)\d{2}\b', part):
-                            year = re.search(r'\b(19|20)\d{2}\b', part).group()
+                    
+                    # Yıl bilgisi için tüm metni kontrol et
+                    year_match = re.search(r'\b(19|20)\d{2}\b', info_text)
+                    if year_match:
+                        year = year_match.group()
+                    else:
+                        # Yıl bilgisi için label elementlerini kontrol et
+                        year_elements = book.find_elements(By.CSS_SELECTOR, "span.label.label-info")
+                        if year_elements:
+                            year = year_elements[0].text.strip()
                     
                     book_info = {
                         'title': title,
@@ -238,80 +241,120 @@ class YOKScraper:
             return []
 
     def get_articles(self):
-        """
-        Akademisyenin makalelerini çeker
-        Returns:
-            list: Makale bilgilerini içeren liste
-        """
         try:
-            # Makaleler sekmesine tıkla
             articles_tab = self.wait.until(EC.element_to_be_clickable(
                 (By.CSS_SELECTOR, "li#articlesMenu a")))
             articles_tab.click()
-            time.sleep(5)
+            
+            # Dinamik bekleme
+            try:
+                self.wait.until(EC.presence_of_element_located(
+                    (By.XPATH, "//div[@id='articles']//table/tbody/tr")))
+            except:
+                print("Makale verisi bulunamadı veya yüklenmedi")
+                return []
             
             articles = []
-            article_elements = self.driver.find_elements(By.CSS_SELECTOR, "tbody.searchable tr")
             
-            for article in article_elements:
-                try:
-                    # Başlık
-                    title = article.find_element(By.CSS_SELECTOR, "span.baslika strong a").text.strip()
+            try:
+                # Tüm tr elementlerini bul - daha spesifik xpath
+                rows = self.driver.find_elements(
+                    By.XPATH, 
+                    "//div[@id='articles']//table/tbody/tr[td[2]]"  # En az 2 td'si olan tr'ler
+                )
+                
+                if not rows:  # Eğer rows boşsa
+                    print("Makale satırları bulunamadı")
+                    return []
                     
-                    # Yazar ve yayın yeri bilgilerini içeren metin
-                    info_text = article.find_element(By.CSS_SELECTOR, "td").text.strip()
-                    
-                    # Yazarlar ve yayın yeri bilgisini ayır
-                    if ", Yayın Yeri:" in info_text:
-                        authors_part, pub_part = info_text.split(", Yayın Yeri:")
-                        authors = authors_part.strip()
-                        
-                        # Yayın yeri ve yıl bilgisini ayır
-                        pub_lines = pub_part.strip().split('\n')
-                        pub_info = pub_lines[0].strip()
-                        
-                        # Son virgülden sonraki kısım yıl bilgisi
-                        if ',' in pub_info:
-                            publication_place, year = pub_info.rsplit(',', 1)
-                            publication_place = publication_place.strip()
-                            year = year.strip()
-                        else:
-                            publication_place = pub_info
-                            year = ""
-                    else:
-                        authors = info_text
-                        publication_place = ""
-                        year = ""
-                    
-                    # Etiketleri al
-                    labels = []
-                    label_elements = article.find_elements(By.CSS_SELECTOR, "span.label")
-                    for label in label_elements:
-                        labels.append(label.text.strip())
-                    
-                    # DOI linkini al
-                    doi_link = ""
+                pbar = tqdm(rows, desc="Makaleler çekiliyor", unit="makale")
+                
+                for row in pbar:
                     try:
-                        doi_element = article.find_element(By.CSS_SELECTOR, "a[href^='https://dx.doi.org']")
-                        doi_link = doi_element.get_attribute("href")
-                    except:
-                        pass
-                    
-                    article_info = {
-                        'title': title,
-                        'authors': authors,
-                        'publication_place': publication_place,
-                        'year': year,
-                        'labels': labels,
-                        'doi': doi_link
-                    }
-                    articles.append(article_info)
-                    
-                except Exception as e:
-                    print(f"Makale bilgisi çekilirken hata: {e}")
-                    continue
-            
-            return articles
+                        cells = row.find_elements(By.TAG_NAME, "td")
+                        if not cells or len(cells) < 2:  # None ve uzunluk kontrolü
+                            continue
+                        
+                        info_cell = cells[1]  # İkinci hücre
+                        if not info_cell:  # info_cell None kontrolü
+                            continue
+                        
+                        # Başlık kontrolü
+                        title_elements = info_cell.find_elements(By.TAG_NAME, "strong")
+                        if not title_elements:
+                            continue
+                        title = title_elements[0].text.strip()
+                        
+                        # Tüm metin içeriği
+                        full_text = info_cell.text.strip()
+                        if not full_text:  # Boş metin kontrolü
+                            continue
+                        
+                        # Yazarlar
+                        try:
+                            text_after_title = full_text.split(title)[1].strip()
+                            authors = text_after_title.split("Yayın Yeri:")[0].strip().strip(',')
+                        except:
+                            authors = ""
+                        
+                        # Yayın yeri ve yıl
+                        try:
+                            if "Yayın Yeri:" in full_text:
+                                pub_text = full_text.split("Yayın Yeri:")[1]
+                                pub_match = re.search(r'(.*?)(?=,\s*(?:19|20)\d{2}|$|\n|<p>)', pub_text)
+                                if pub_match:
+                                    publication_place = pub_match.group(1).strip()
+                                else:
+                                    publication_place = pub_text.split(',')[0].strip()
+                            else:
+                                publication_place = ""
+                            
+                            year_match = re.search(r'\b(19|20)\d{2}\b', full_text)
+                            year = year_match.group() if year_match else ""
+                            
+                        except Exception as e:
+                            print(f"Yayın yeri/yıl ayrıştırma hatası: {e}")
+                            publication_place = ""
+                            year = ""
+                        
+                        # Etiketler - üçüncü hücre
+                        labels = []
+                        if len(cells) > 2:
+                            label_elements = cells[2].find_elements(By.TAG_NAME, "span")
+                            labels = [label.text.strip() for label in label_elements if label.text.strip()]
+                        
+                        # DOI - dördüncü hücre
+                        doi = ""
+                        if len(cells) > 3:
+                            doi_links = cells[3].find_elements(By.TAG_NAME, "a")
+                            for link in doi_links:
+                                href = link.get_attribute("href")
+                                if href and "doi.org" in href:
+                                    doi = href
+                                    break
+                        
+                        article_info = {
+                            'title': title,
+                            'authors': authors,
+                            'publication_place': publication_place,
+                            'year': year,
+                            'labels': labels,
+                            'doi': doi
+                        }
+                        articles.append(article_info)
+                        
+                        pbar.set_description(f"Makale işleniyor: {title[:30]}...")
+                        
+                    except Exception as e:
+                        print(f"Makale bilgisi çekilirken hata: {e}")
+                        continue
+                
+                return articles
+                
+            except Exception as e:
+                print(f"Makale listesi işlenirken hata: {e}")
+                return []
+                
         except Exception as e:
             print(f"Makaleler çekilirken hata: {e}")
             return []
@@ -341,30 +384,42 @@ class YOKScraper:
                     # Başlık
                     title = proceeding.find_element(By.CSS_SELECTOR, "strong").text.strip()
                     
-                    # Yazarlar - Kombine yöntem
+                    # Yazarlar - Text node'ları kullanarak
                     try:
-                        # 1. Yöntem: popoverData elementleri
-                        author_elements = proceeding.find_elements(By.CSS_SELECTOR, "a.popoverData")
-                        popover_authors = [author.text.strip() for author in author_elements if author.text.strip()]
+                        # Başlıktan sonraki text node'ları al
+                        text_nodes = proceeding.find_elements(By.XPATH, ".//text()")
+                        authors_text = ""
                         
-                        # 2. Yöntem: Normal metin yazarları
-                        td_text = proceeding.find_element(By.CSS_SELECTOR, "td").text
-                        text_after_title = td_text.split(title)[1] if title in td_text else td_text
-                        text_before_pub = text_after_title.split("Yayın Yeri:")[0] if "Yayın Yeri:" in text_after_title else text_after_title
+                        # Başlıktan sonraki ve Yayın Yeri'nden önceki text node'ları birleştir
+                        found_title = False
+                        for node in text_nodes:
+                            node_text = node.get_attribute('textContent').strip()
+                            if title in node_text:
+                                found_title = True
+                                node_text = node_text.split(title)[1]
+                            elif not found_title:
+                                continue
+                            
+                            if "Yayın Yeri:" in node_text:
+                                authors_text += node_text.split("Yayın Yeri:")[0]
+                                break
+                            else:
+                                authors_text += node_text + " "
                         
-                        # Parantez içi tarihleri temizle
-                        text_before_pub = re.sub(r'\(\d{2}\.\d{2}\.\d{4}\s*-\s*\d{2}\.\d{2}\.\d{4}\s*\)', '', text_before_pub)
+                        # Gereksiz karakterleri temizle
+                        authors_text = authors_text.strip()
+                        authors_text = re.sub(r'\s*\([^)]*\)\s*', '', authors_text)  # Parantez içlerini temizle
+                        authors_text = authors_text.strip(' ,:')
                         
                         # Virgülle ayır ve temizle
-                        text_authors = [a.strip() for a in text_before_pub.split(',') if a.strip() and len(a.strip()) > 2]
+                        authors_list = []
+                        for author in authors_text.split(','):
+                            author = author.strip()
+                            # Boş olmayan ve çok kısa olmayan yazarları ekle
+                            if author and len(author) > 2 and not any(c.isdigit() for c in author):
+                                authors_list.append(author)
                         
-                        # İki listeyi birleştir ve tekrar edenleri kaldır
-                        all_authors = []
-                        for author in text_authors + popover_authors:
-                            if author not in all_authors:
-                                all_authors.append(author)
-                        
-                        authors = ', '.join(all_authors)
+                        authors = ', '.join(authors_list)
                         
                     except Exception as e:
                         print(f"Yazar ayrıştırma hatası: {e}")
@@ -635,7 +690,7 @@ class YOKScraper:
         """
         try:
             self.setup_driver()
-            total_steps = 6
+            total_steps = 4  # 6'dan 4'e düşürüldü (Word ve JSON kaydı çıkarıldı)
             with tqdm(total=total_steps, desc="Veriler çekiliyor") as pbar:
                 try:
                     pbar.set_description("Akademik bilgiler çekiliyor")
@@ -661,88 +716,16 @@ class YOKScraper:
                         'proceedings': proceedings
                     }
                     
-                    pbar.set_description("Word dosyası oluşturuluyor")
-                    self.save_to_word(results)
-                    pbar.update(1)
-                    
-                    pbar.set_description("JSON dosyası oluşturuluyor")
-                    self.save_to_json(results)
-                    pbar.update(1)
-                    
                     pbar.set_description("İşlem tamamlandı!")
+                    return results
+                    
                 except Exception as e:
                     print(f"Veri çekme hatası: {e}")
-                    pbar.update(total_steps - pbar.n)  # Kalan adımları tamamla
-            
-            return results
+                    pbar.update(total_steps - pbar.n)
+                    return None
         finally:
             if self.driver:
                 self.driver.quit()
-
-    def get_profile_info(self):
-        """
-        Akademisyenin profil bilgilerini ve resmini çeker
-        """
-        try:
-            profile = {}
-            
-            # Ad Soyad ve unvan
-            name_element = self.driver.find_element(By.CSS_SELECTOR, "div.col-lg-6.col-md-6.col-sm-10.col-xs-12 h4")
-            if name_element:
-                profile['name'] = name_element.text.strip()
-            
-            # Kurum ve bölüm bilgisi
-            department_element = self.driver.find_element(By.CSS_SELECTOR, "div.col-lg-6.col-md-6.col-sm-10.col-xs-12")
-            if department_element:
-                # İlk metin bloğunu al (h4'ten sonraki ilk text node)
-                text_nodes = [node for node in department_element.find_elements(By.XPATH, "./text()")]
-                if text_nodes:
-                    department_text = text_nodes[0].text.strip()
-                    profile['department_info'] = department_text
-            
-            # Temel alan ve uzmanlık alanları
-            labels = self.driver.find_elements(By.CSS_SELECTOR, "div.col-lg-6.col-md-6.col-sm-10.col-xs-12 span.label")
-            if labels:
-                areas = []
-                for label in labels:
-                    label_class = label.get_attribute('class')
-                    label_text = label.text.strip()
-                    if 'label-success' in label_class:
-                        areas.append(('Temel Alan', label_text))
-                    elif 'label-primary' in label_class:
-                        areas.append(('Uzmanlık Alanı', label_text))
-                profile['areas'] = areas
-            
-            # Araştırma alanları
-            research_areas = []
-            research_text = department_element.text
-            if research_text:
-                # Son satırdan araştırma alanlarını çek
-                lines = research_text.split('\n')
-                for line in lines:
-                    if any(keyword in line for keyword in ['Ağları', 'Zeka', 'İşleme']):
-                        areas = [area.strip() for area in line.split(',')]
-                        research_areas.extend(areas)
-            profile['research_areas'] = research_areas
-            
-            # Profil resmi
-            try:
-                img_element = self.driver.find_element(By.CSS_SELECTOR, "div.col-lg-2.col-md-2.col-sm-2.col-xs-0.text-center img.img-circle")
-                if img_element:
-                    img_src = img_element.get_attribute('src')
-                    if img_src.startswith('data:image'):
-                        import base64
-                        img_data = img_src.split(',')[1]
-                        with open('profile_photo.jpg', 'wb') as f:
-                            f.write(base64.b64decode(img_data))
-                        profile['image_path'] = 'profile_photo.jpg'
-            except Exception as e:
-                print(f"Profil resmi çekilirken hata: {e}")
-            
-            return profile
-        except Exception as e:
-            print(f"Profil bilgileri çekilirken hata: {e}")
-            return {}
 
     def save_to_word(self, data, filename='academic_info.docx'):
         """
