@@ -13,6 +13,7 @@ from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from tqdm import tqdm
+import re
 
 class YOKScraper:
     def __init__(self, url):
@@ -289,35 +290,33 @@ class YOKScraper:
                     authors = ', '.join(author.text.strip() for author in author_elements)
                     
                     # Yayın yeri ve yıl - yeni yöntem
-                    info_text = proceeding.find_element(By.CSS_SELECTOR, "td").text.strip()
-                    
-                    publication_place = ""
-                    year = ""
-                    
-                    # "Yayın Yeri:" ifadesinden sonrasını al
-                    if "Yayın Yeri:" in info_text:
-                        pub_info = info_text.split("Yayın Yeri:")[1].strip()
-                        # Virgülle ayrılmış parçaları al
-                        parts = [p.strip() for p in pub_info.split(',')]
+                    try:
+                        full_text = proceeding.text.strip()
                         
-                        for i, part in enumerate(parts):
-                            # Son parça ve 4 haneli sayı kontrolü
-                            if i == len(parts) - 1 and part.strip().isdigit() and len(part.strip()) == 4:
-                                year = part.strip()
-                                # Yayın yerini önceki parçalardan oluştur
-                                publication_place = ', '.join(parts[:-1]).strip()
-                                break
-                            # Eğer parça içinde 4 haneli yıl varsa
-                            elif any(p.strip().isdigit() and len(p.strip()) == 4 for p in part.split()):
-                                # Yılı bul
-                                for word in part.split():
-                                    if word.strip().isdigit() and len(word.strip()) == 4:
-                                        year = word.strip()
-                                        # Yayın yerini yıl hariç birleştir
-                                        pub_parts = parts[:i] + [part.replace(year, '').strip()]
-                                        publication_place = ', '.join(pub_parts).strip()
-                                        break
-                                break
+                        # Yayın yeri bilgisini bul
+                        if "Yayın Yeri:" in full_text:
+                            pub_info = full_text.split("Yayın Yeri:")[1].strip()
+                            # İlk satırı al (yayın yeri genelde ilk satırda)
+                            publication_info = pub_info.split('\n')[0].strip()
+                            
+                            # Yazarları, yılı ve tür bilgisini temizle
+                            publication_info = publication_info.replace(authors, '').strip()
+                            publication_info = re.sub(r'\b(19|20)\d{2}\b', '', publication_info).strip()
+                            publication_info = re.sub(r'Tam metin bildiri', '', publication_info, flags=re.IGNORECASE).strip()
+                            # Gereksiz karakterleri temizle
+                            publication_info = re.sub(r'[,\s]+$', '', publication_info)
+                            publication_info = publication_info.strip(' ,:()[]')
+                        else:
+                            publication_info = ""
+                        
+                        # Yıl bilgisini bul
+                        year_match = re.search(r'\b(19|20)\d{2}\b', full_text)
+                        year = year_match.group() if year_match else ""
+                        
+                    except Exception as e:
+                        print(f"Yayın yeri/yıl ayrıştırma hatası: {e}")
+                        publication_info = ""
+                        year = ""
                     
                     # Tür bilgisi
                     proceeding_type = ""
@@ -330,7 +329,7 @@ class YOKScraper:
                     proceeding_info = {
                         'title': title,
                         'authors': authors,
-                        'publication_place': publication_place.strip(' ,'),  # Sondaki virgül ve boşlukları temizle
+                        'publication_place': publication_info,
                         'year': year,
                         'type': proceeding_type
                     }
