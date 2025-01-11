@@ -40,11 +40,16 @@ class YOKScraper:
         """Selenium webdriver'ı başlatır ve gerekli ayarları yapar"""
         try:
             options = webdriver.ChromeOptions()
-            options.add_argument('--headless=new')  # Yeni headless modu
+            options.add_argument('--headless=new')
             options.add_argument('--disable-gpu')
             options.add_argument('--no-sandbox')
             options.add_argument('--disable-dev-shm-usage')
             options.add_argument('--window-size=1920,1080')
+            
+            # Kararlılık için ek ayarlar
+            options.add_argument('--disable-web-security')
+            options.add_argument('--allow-running-insecure-content')
+            options.add_argument('--disable-features=IsolateOrigins,site-per-process')
             
             # Hata ayıklama mesajlarını gizle
             options.add_experimental_option('excludeSwitches', ['enable-logging'])
@@ -366,11 +371,15 @@ class YOKScraper:
             list: Bildiri bilgilerini içeren liste
         """
         try:
+            # Bildiriler sekmesine tıkla ve yüklenmeyi bekle
             proceedings_tab = self.wait.until(EC.element_to_be_clickable(
                 (By.CSS_SELECTOR, "li#proceedingMenu a")))
             proceedings_tab.click()
             
-            # Sabit bekleme yerine dinamik bekleme
+            # Sayfanın yüklenmesini bekle
+            time.sleep(2)  # Kısa bir bekleme ekleyelim
+            
+            # Bildiri elementlerinin yüklenmesini bekle
             self.wait.until(EC.presence_of_element_located(
                 (By.CSS_SELECTOR, "div.tab-content div.tab-pane.active tr")))
             
@@ -384,42 +393,23 @@ class YOKScraper:
                     # Başlık
                     title = proceeding.find_element(By.CSS_SELECTOR, "strong").text.strip()
                     
-                    # Yazarlar - Text node'ları kullanarak
+                    # Yazarlar - popoverData elementlerinden çekme
                     try:
-                        # Başlıktan sonraki text node'ları al
-                        text_nodes = proceeding.find_elements(By.XPATH, ".//text()")
-                        authors_text = ""
-                        
-                        # Başlıktan sonraki ve Yayın Yeri'nden önceki text node'ları birleştir
-                        found_title = False
-                        for node in text_nodes:
-                            node_text = node.get_attribute('textContent').strip()
-                            if title in node_text:
-                                found_title = True
-                                node_text = node_text.split(title)[1]
-                            elif not found_title:
-                                continue
+                        # Önce popoverData elementlerini bul
+                        author_elements = proceeding.find_elements(By.CSS_SELECTOR, "a.popoverData")
+                        if author_elements:
+                            # Yazarları listede topla
+                            authors_list = []
+                            for author_elem in author_elements:
+                                author_name = author_elem.text.strip()
+                                if author_name and len(author_name) > 2:  # Boş ve çok kısa stringleri filtrele
+                                    authors_list.append(author_name)
                             
-                            if "Yayın Yeri:" in node_text:
-                                authors_text += node_text.split("Yayın Yeri:")[0]
-                                break
-                            else:
-                                authors_text += node_text + " "
-                        
-                        # Gereksiz karakterleri temizle
-                        authors_text = authors_text.strip()
-                        authors_text = re.sub(r'\s*\([^)]*\)\s*', '', authors_text)  # Parantez içlerini temizle
-                        authors_text = authors_text.strip(' ,:')
-                        
-                        # Virgülle ayır ve temizle
-                        authors_list = []
-                        for author in authors_text.split(','):
-                            author = author.strip()
-                            # Boş olmayan ve çok kısa olmayan yazarları ekle
-                            if author and len(author) > 2 and not any(c.isdigit() for c in author):
-                                authors_list.append(author)
-                        
-                        authors = ', '.join(authors_list)
+                            # Yazarları birleştir
+                            authors = ', '.join(authors_list)
+                        else:
+                            # Eğer popoverData bulunamazsa boş string döndür
+                            authors = ""
                         
                     except Exception as e:
                         print(f"Yazar ayrıştırma hatası: {e}")
