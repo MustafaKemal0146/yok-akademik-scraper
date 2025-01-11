@@ -1,6 +1,6 @@
 # YÖK Akademik Veri Çekme Aracı v1.1.0
 
-Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olarak çeken ve düzenli bir Word dokümanı olarak kaydeden bir Python uygulamasıdır.
+Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olarak çeken ve düzenli bir Word dokümanı ve Json olarak kaydeden bir Python uygulamasıdır.
 
 ## 🚀 Özellikler
 
