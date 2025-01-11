@@ -1,4 +1,4 @@
-# YÖK Akademik Veri Çekme Aracı
+# YÖK Akademik Veri Çekme Aracı v1.1.0
 
 Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olarak çeken ve düzenli bir Word dokümanı olarak kaydeden bir Python uygulamasıdır.
 
@@ -12,6 +12,9 @@ Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olar
 - Tüm bilgileri düzenli bir Word dokümanı olarak kaydetme
 - Her kategoriyi ayrı sayfalarda gösterme
 - Otomatik Chrome driver yönetimi
+- İlerleme çubuğu ile işlem takibi
+- Optimize edilmiş veri çekme hızı
+- Geliştirilmiş hata yönetimi
 
 ## 📋 Gereksinimler
 
@@ -71,15 +74,15 @@ Word dokümanı aşağıdaki bölümleri içerir:
 4. **Makaleler**
    - Başlık
    - Yazarlar
-   - Dergi
+   - Yayın Yeri
    - Yıl
-   - İndeks bilgisi
+   - Etiketler
    - DOI
 
 5. **Bildiriler**
    - Başlık
    - Yazarlar
-   - Konferans bilgisi
+   - Yayın Yeri
    - Yıl
    - Tür
 
@@ -89,6 +92,8 @@ Word dokümanı aşağıdaki bölümleri içerir:
 - İnternet bağlantınızın stabil olduğundan emin olun
 - YÖK Akademik'in yapısı değişirse program güncellenmeye ihtiyaç duyabilir
 - Çok sayıda istek atılması durumunda YÖK Akademik geçici olarak erişimi kısıtlayabilir
+- Progress bar sayesinde işlemin hangi aşamada olduğunu takip edebilirsiniz
+- Optimize edilmiş yapı sayesinde daha hızlı veri çekimi yapılmaktadır
 
 ## 🔄 Güncelleme Geçmişi
 
@@ -96,6 +101,14 @@ Word dokümanı aşağıdaki bölümleri içerir:
   - Temel veri çekme özellikleri
   - Word dokümanı oluşturma
   - Hata yönetimi
+- v1.1.0 (2024-02): Performans Güncellemesi
+  - Progress bar eklendi (işlem durumu gösterimi)
+  - Chrome tarayıcı optimizasyonları yapıldı
+  - Veri çekme hızı artırıldı
+  - Yayın yeri ve yıl bilgisi çekimi iyileştirildi
+  - Gereksiz resim yüklemeleri devre dışı bırakıldı
+  - Bekleme süreleri optimize edildi
+  - Daha detaylı konsol çıktıları eklendi
 
 ## 🤝 Katkıda Bulunma
 
