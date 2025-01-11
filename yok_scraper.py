@@ -47,18 +47,22 @@ class YOKScraper:
             options.add_argument('--window-size=1920,1080')
             options.add_argument('--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
             
+            # Hata ayıklama mesajlarını gizle
+            options.add_experimental_option('excludeSwitches', ['enable-logging'])
+            options.add_argument('--log-level=3')  # Sadece kritik hataları göster
+            
             # Performans optimizasyonları
             options.add_argument('--disable-extensions')
             options.add_argument('--disable-infobars')
             options.add_argument('--disable-notifications')
             options.add_argument('--disable-popup-blocking')
-            options.add_argument('--blink-settings=imagesEnabled=false')  # Resimleri devre dışı bırak
+            options.add_argument('--blink-settings=imagesEnabled=false')
             
             self.driver = webdriver.Chrome(options=options)
-            self.wait = WebDriverWait(self.driver, 10)  # 30 yerine 10 saniye
+            self.wait = WebDriverWait(self.driver, 10)
         except Exception as e:
             print(f"Chrome sürücüsü başlatılamadı: {e}")
-            raise  # Kritik hata olduğu için yeniden yükselt
+            raise
         
     def _get_element_text(self, element, selector: str) -> str:
         """CSS seçici ile element metnini al (Cache'li)"""
@@ -368,24 +372,44 @@ class YOKScraper:
                     
                     # Tür bilgisi - Genişletilmiş arama
                     try:
-                        proceeding_type = ""
+                        proceeding_types = []
                         # Önce label elementlerini kontrol et
                         type_elements = proceeding.find_elements(By.CSS_SELECTOR, "span.label")
                         for element in type_elements:
-                            if any(type_text in element.text.lower() for type_text in ["tam metin", "özet", "bildiri"]):
-                                proceeding_type = element.text.strip()
-                                break
+                            label_text = element.text.strip()
+                            if label_text:
+                                # Ulusal/Uluslararası kontrolü
+                                if "Uluslararası" in label_text:
+                                    proceeding_types.append("Uluslararası")
+                                elif "Ulusal" in label_text:
+                                    proceeding_types.append("Ulusal")
+                                # Bildiri türü kontrolü
+                                if "tam metin" in label_text.lower():
+                                    proceeding_types.append("Tam metin bildiri")
+                                elif "özet" in label_text.lower():
+                                    proceeding_types.append("Özet bildiri")
+                                elif "bildiri" in label_text.lower():
+                                    proceeding_types.append("Bildiri")
                         
-                        # Eğer bulunamadıysa tüm metinde ara
-                        if not proceeding_type:
+                        # Eğer label'lardan bulunamadıysa tüm metinde ara
+                        if not proceeding_types:
                             full_text = proceeding.text.lower()
+                            if "uluslararası" in full_text:
+                                proceeding_types.append("Uluslararası")
+                            elif "ulusal" in full_text:
+                                proceeding_types.append("Ulusal")
+                            
                             if "tam metin bildiri" in full_text:
-                                proceeding_type = "Tam metin bildiri"
+                                proceeding_types.append("Tam metin bildiri")
                             elif "özet bildiri" in full_text:
-                                proceeding_type = "Özet bildiri"
+                                proceeding_types.append("Özet bildiri")
                             elif "bildiri" in full_text:
-                                proceeding_type = "Bildiri"
-                    
+                                proceeding_types.append("Bildiri")
+                        
+                        # Tekrar eden türleri kaldır ve birleştir
+                        proceeding_types = list(dict.fromkeys(proceeding_types))  # Tekrarları kaldır
+                        proceeding_type = " | ".join(proceeding_types) if proceeding_types else ""
+
                     except Exception as e:
                         print(f"Tür bilgisi çekme hatası: {e}")
                         proceeding_type = ""
