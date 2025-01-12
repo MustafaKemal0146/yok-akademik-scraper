@@ -16,6 +16,8 @@ from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from tqdm import tqdm
 import re
+from selenium.webdriver.chrome.service import Service
+from webdriver_manager.chrome import ChromeDriverManager
 
 class YOKScraper:
     def __init__(self, url):
@@ -30,50 +32,43 @@ class YOKScraper:
         self.driver = None
         self.wait = None
         
-    def __del__(self):
-        """Destructor: Kaynakları temizle"""
+    def __enter__(self):
+        self.setup_driver()
+        return self
+        
+    def __exit__(self, exc_type, exc_val, exc_tb):
         if self.driver:
-            try:
-                self.driver.quit()
-            except:
-                pass
-        
+            self.driver.quit()
+
     def setup_driver(self):
-        """Selenium webdriver'ı başlatır ve gerekli ayarları yapar"""
-        try:
-            options = webdriver.ChromeOptions()
-            options.add_argument('--headless=new')
-            options.add_argument('--disable-gpu')
-            options.add_argument('--no-sandbox')
-            options.add_argument('--disable-dev-shm-usage')
-            options.add_argument('--window-size=1920,1080')
-            
-            # Kararlılık için ek ayarlar
-            options.add_argument('--disable-web-security')
-            options.add_argument('--allow-running-insecure-content')
-            options.add_argument('--disable-features=IsolateOrigins,site-per-process')
-            
-            # Hata ayıklama mesajlarını gizle
-            options.add_experimental_option('excludeSwitches', ['enable-logging'])
-            options.add_argument('--log-level=3')
-            
-            # Performans optimizasyonları
-            options.add_argument('--disable-extensions')
-            options.add_argument('--disable-infobars')
-            options.add_argument('--disable-notifications')
-            
-            # WebDriver yönetimini geliştir
-            from selenium.webdriver.chrome.service import Service
-            from webdriver_manager.chrome import ChromeDriverManager
-            
-            service = Service(ChromeDriverManager().install())
-            self.driver = webdriver.Chrome(service=service, options=options)
-            self.wait = WebDriverWait(self.driver, 10)
-            
-        except Exception as e:
-            print(f"Chrome sürücüsü başlatılamadı: {e}")
-            raise
+        """Selenium webdriver'ı optimize edilmiş ayarlarla başlatır"""
+        options = webdriver.ChromeOptions()
+        options.add_argument('--headless=new')
+        options.add_argument('--disable-gpu')
+        options.add_argument('--no-sandbox')
+        options.add_argument('--disable-dev-shm-usage')
+        options.add_argument('--window-size=1920,1080')
         
+        # Performans optimizasyonları
+        options.add_argument('--disable-extensions')
+        options.add_argument('--disable-infobars')
+        options.add_argument('--disable-notifications')
+        options.add_argument('--disable-logging')
+        options.add_argument('--disable-web-security')
+        options.add_argument('--dns-prefetch-disable')
+        options.page_load_strategy = 'eager'  # Sayfa tam yüklenmeden işlem yapmaya başla
+        
+        prefs = {
+            'profile.managed_default_content_settings.images': 2,  # Resimleri devre dışı bırak
+            'disk-cache-size': 4096,  # Cache boyutunu artır
+            'profile.default_content_setting_values.notifications': 2
+        }
+        options.add_experimental_option('prefs', prefs)
+        
+        service = Service(ChromeDriverManager().install())
+        self.driver = webdriver.Chrome(service=service, options=options)
+        self.wait = WebDriverWait(self.driver, 5)  # Timeout süresini düşür
+
     def get_academic_info(self):
         """
         Akademisyenin görev ve öğrenim bilgilerini çeker
@@ -843,7 +838,15 @@ class YOKScraper:
                 p.add_run(f"\nYazarlar: {proc['authors']}")
                 p.add_run(f"\nYayın Yeri: {proc['publication_place']}")
                 p.add_run(f"\nYıl: {proc['year']}")
-                p.add_run(f"\nTür: {proc['type']}")
+                
+                # Tür bilgisini ayır
+                if '|' in proc['type']:
+                    proceeding_type, presentation_type = [t.strip() for t in proc['type'].split('|')]
+                    p.add_run(f"\nTür: {proceeding_type}")
+                    p.add_run(f"\nSunum Şekli: {presentation_type}")
+                else:
+                    p.add_run(f"\nTür: {proc['type']}")
+                    
                 doc.add_paragraph()
         
         # Dosyayı kaydet
