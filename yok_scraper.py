@@ -711,7 +711,7 @@ class YOKScraper:
     def scrape_all(self):
         try:
             self.setup_driver()
-            total_steps = 6  # Proje için +1
+            total_steps = 7  # Dersler için +1
             with tqdm(total=total_steps, desc="Veriler çekiliyor", colour="green") as pbar:
                 try:
                     pbar.set_description("Akademik bilgiler çekiliyor")
@@ -734,12 +734,17 @@ class YOKScraper:
                     projects = self.get_projects()
                     pbar.update(1)
                     
+                    pbar.set_description("Dersler çekiliyor")
+                    lessons = self.get_lessons()
+                    pbar.update(1)
+                    
                     results = {
                         'academic_info': academic_info,
                         'books': books,
                         'articles': articles,
                         'proceedings': proceedings,
-                        'projects': projects
+                        'projects': projects,
+                        'lessons': lessons
                     }
                     
                     pbar.set_description("İşlem tamamlandı!")
@@ -882,6 +887,36 @@ class YOKScraper:
                 doc.add_paragraph()
             doc.add_page_break()
         
+        # Dersler
+        if 'lessons' in data and data['lessons']:
+            doc.add_heading('Verdiği Dersler', level=1)
+            
+            for level, info in data['lessons'].items():
+                if info['lessons']:  # Eğer dersler varsa
+                    doc.add_heading(info['name'], level=2)
+                    
+                    # Tablo oluştur
+                    table = doc.add_table(rows=1, cols=4)
+                    table.style = 'Table Grid'
+                    
+                    # Başlık satırı
+                    header_cells = table.rows[0].cells
+                    header_cells[0].text = 'Dönem'
+                    header_cells[1].text = 'Ders Adı'
+                    header_cells[2].text = 'Dili'
+                    header_cells[3].text = 'Saat'
+                    
+                    # Ders bilgilerini ekle
+                    for lesson in info['lessons']:
+                        row_cells = table.add_row().cells
+                        row_cells[0].text = lesson['term']
+                        row_cells[1].text = lesson['name']
+                        row_cells[2].text = lesson['language']
+                        row_cells[3].text = lesson['hours']
+                    
+                    doc.add_paragraph()  # Boşluk ekle
+            doc.add_page_break()
+        
         # Dosyayı kaydet
         doc.save(filename)
         print(f"Word dosyası başarıyla oluşturuldu: {filename}")
@@ -905,7 +940,8 @@ class YOKScraper:
                 'books': data.get('books', []),
                 'articles': data.get('articles', []),
                 'proceedings': data.get('proceedings', []),
-                'projects': data.get('projects', [])
+                'projects': data.get('projects', []),
+                'lessons': data.get('lessons', {})
             }
             
             # Dosyayı çalışılan dizine kaydet
@@ -998,3 +1034,77 @@ class YOKScraper:
         except Exception as e:
             print(Fore.RED + f"Projeler çekilirken hata: {e}")
             return []  
+
+    def get_lessons(self):
+        try:
+            # Dersler sekmesine tıkla
+            lessons_tab = self.wait.until(EC.element_to_be_clickable(
+                (By.CSS_SELECTOR, "li#lessonMenu a")))
+            lessons_tab.click()
+            time.sleep(1)  # Menünün yüklenmesi için bekle
+            
+            # Önce "Önlisans" başlığına tıkla
+            onlisans_header = self.wait.until(EC.element_to_be_clickable(
+                (By.XPATH, "//a[contains(text(), 'Önlisans')]")))
+            onlisans_header.click()
+            time.sleep(1)  # Tablonun yüklenmesi için bekle
+            
+            # Eğitim seviyelerini tanımla
+            education_levels = {
+                'associate': {'id': 'collapse0', 'name': 'Ön Lisans'},
+                'undergraduate': {'id': 'collapse1', 'name': 'Lisans'},
+                'graduate': {'id': 'collapse2', 'name': 'Yüksek Lisans'}
+            }
+            
+            all_lessons = {}
+            
+            # Her eğitim seviyesi için dersleri çek
+            for level, info in education_levels.items():
+                try:
+                    # Eğitim seviyesi başlığına tıkla
+                    level_header = self.wait.until(EC.element_to_be_clickable(
+                        (By.XPATH, f"//a[contains(@href, '#{info['id']}')]")))
+                    level_header.click()
+                    time.sleep(1)  # Tablonun yüklenmesi için bekle
+                    
+                    lessons = []
+                    
+                    # Tablo elementini bul
+                    table = self.wait.until(EC.presence_of_element_located(
+                        (By.CSS_SELECTOR, f"#{info['id']} table.table")))
+                    
+                    # Tablo satırlarını al
+                    rows = table.find_elements(By.CSS_SELECTOR, "tbody tr")
+                    
+                    for row in rows:
+                        try:
+                            cols = row.find_elements(By.TAG_NAME, "td")
+                            if len(cols) >= 4:
+                                lesson = {
+                                    'term': cols[0].text.strip(),
+                                    'name': cols[1].text.strip(),
+                                    'language': cols[2].text.strip(),
+                                    'hours': cols[3].text.strip()
+                                }
+                                lessons.append(lesson)
+                        except Exception as e:
+                            print(Fore.RED + f"HATA: Ders satırı çekilemedi: {e}")
+                            continue
+                    
+                    all_lessons[level] = {
+                        'name': info['name'],
+                        'lessons': lessons
+                    }
+                    
+                except Exception as e:
+                    print(Fore.RED + f"HATA: {info['name']} dersleri çekilemedi: {e}")
+                    all_lessons[level] = {
+                        'name': info['name'],
+                        'lessons': []
+                    }
+            
+            return all_lessons
+            
+        except Exception as e:
+            print(Fore.RED + f"Dersler çekilirken hata: {e}")
+            return {}  
