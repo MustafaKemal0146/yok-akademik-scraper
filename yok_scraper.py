@@ -371,121 +371,86 @@ class YOKScraper:
             list: Bildiri bilgilerini içeren liste
         """
         try:
-            # Bildiriler sekmesine tıkla ve yüklenmeyi bekle
             proceedings_tab = self.wait.until(EC.element_to_be_clickable(
                 (By.CSS_SELECTOR, "li#proceedingMenu a")))
             proceedings_tab.click()
             
-            # Sayfanın yüklenmesini bekle
-            time.sleep(2)  # Kısa bir bekleme ekleyelim
-            
             # Bildiri elementlerinin yüklenmesini bekle
             self.wait.until(EC.presence_of_element_located(
-                (By.CSS_SELECTOR, "div.tab-content div.tab-pane.active tr")))
+                (By.XPATH, '(//table)[1]/tbody/tr')))
             
             proceedings = []
-            proceeding_elements = self.driver.find_elements(By.CSS_SELECTOR, "div.tab-content div.tab-pane.active tr")
+            rows = self.driver.find_elements(By.XPATH, '(//table)[1]/tbody/tr')
             
-            pbar = tqdm(proceeding_elements, desc="Bildiriler çekiliyor", unit="bildiri")
+            pbar = tqdm(rows, desc="Bildiriler çekiliyor", unit="bildiri")
             
             for proceeding in pbar:
                 try:
+                    # İkinci hücreyi al (index 1)
+                    second_td = proceeding.find_elements(By.XPATH, './/td')[1]
+                    outer_html = second_td.get_attribute('outerHTML')
+                    
                     # Başlık
                     title = proceeding.find_element(By.CSS_SELECTOR, "strong").text.strip()
                     
-                    # Yazarlar - popoverData elementlerinden çekme
+                    # Yazarlar - HTML parsing ile
                     try:
-                        # Önce popoverData elementlerini bul
-                        author_elements = proceeding.find_elements(By.CSS_SELECTOR, "a.popoverData")
-                        if author_elements:
-                            # Yazarları listede topla
-                            authors_list = []
-                            for author_elem in author_elements:
-                                author_name = author_elem.text.strip()
-                                if author_name and len(author_name) > 2:  # Boş ve çok kısa stringleri filtrele
-                                    authors_list.append(author_name)
-                            
-                            # Yazarları birleştir
-                            authors = ', '.join(authors_list)
-                        else:
-                            # Eğer popoverData bulunamazsa boş string döndür
-                            authors = ""
+                        # <p></p> ile <p> arasındaki veriyi al
+                        p_content = outer_html.split('<p></p>')[1].split('<p>')[0].strip()
+                        parts = p_content.replace('\n, ', ' , ').split(' , ')
+                        p_authors_html = parts[0].strip() if len(parts) > 0 else ''
                         
+                        # HTML etiketlerini kaldır ve yazarları ayır
+                        soup = BeautifulSoup(p_authors_html, 'html.parser')
+                        authors_list = [author.strip() for author in soup.get_text().split(',')]
+                        
+                        # Son yazar adında bulunan tarih bilgisini ayır
+                        if authors_list:
+                            authors_list[-1] = authors_list[-1].split('\n ')[0].strip()
+                        
+                        authors = ', '.join(filter(None, authors_list))
                     except Exception as e:
                         print(f"Yazar ayrıştırma hatası: {e}")
                         authors = ""
                     
-                    # Tür bilgisi - Genişletilmiş arama
-                    try:
-                        proceeding_types = []
-                        # Önce label elementlerini kontrol et
-                        type_elements = proceeding.find_elements(By.CSS_SELECTOR, "span.label")
-                        for element in type_elements:
-                            label_text = element.text.strip()
-                            if label_text:
-                                # Ulusal/Uluslararası kontrolü
-                                if "Uluslararası" in label_text:
-                                    proceeding_types.append("Uluslararası")
-                                elif "Ulusal" in label_text:
-                                    proceeding_types.append("Ulusal")
-                                # Bildiri türü kontrolü
-                                if "tam metin" in label_text.lower():
-                                    proceeding_types.append("Tam metin bildiri")
-                                elif "özet" in label_text.lower():
-                                    proceeding_types.append("Özet bildiri")
-                                elif "bildiri" in label_text.lower():
-                                    proceeding_types.append("Bildiri")
-                        
-                        # Eğer label'lardan bulunamadıysa tüm metinde ara
-                        if not proceeding_types:
-                            full_text = proceeding.text.lower()
-                            if "uluslararası" in full_text:
-                                proceeding_types.append("Uluslararası")
-                            elif "ulusal" in full_text:
-                                proceeding_types.append("Ulusal")
-                            
-                            if "tam metin bildiri" in full_text:
-                                proceeding_types.append("Tam metin bildiri")
-                            elif "özet bildiri" in full_text:
-                                proceeding_types.append("Özet bildiri")
-                            elif "bildiri" in full_text:
-                                proceeding_types.append("Bildiri")
-                        
-                        # Tekrar eden türleri kaldır ve birleştir
-                        proceeding_types = list(dict.fromkeys(proceeding_types))  # Tekrarları kaldır
-                        proceeding_type = " | ".join(proceeding_types) if proceeding_types else ""
-
-                    except Exception as e:
-                        print(f"Tür bilgisi çekme hatası: {e}")
-                        proceeding_type = ""
-                    
                     # Yayın yeri ve yıl
                     try:
-                        full_text = proceeding.text.strip()
-                        
-                        # Yayın yeri bilgisini bul
-                        if "Yayın Yeri:" in full_text:
-                            pub_text = full_text.split("Yayın Yeri:")[1]
-                            # Yıl veya etiketlerden önceki kısmı al (parantezleri de kapsayacak şekilde)
+                        if "Yayın Yeri:" in outer_html:
+                            pub_text = outer_html.split("Yayın Yeri:")[1]
                             pub_match = re.search(r'(.*?)(?=,\s*(?:19|20)\d{2}|$|\n|<p>)', pub_text)
                             if pub_match:
                                 publication_info = pub_match.group(1).strip()
-                                # Gereksiz karakterleri temizle ama parantezleri koru
                                 publication_info = re.sub(r'[,\s]+$', '', publication_info)
                                 publication_info = publication_info.strip(' :,')
                             else:
-                                publication_info = pub_text.strip()
+                                publication_info = ""
                         else:
                             publication_info = ""
                         
-                        # Yıl bilgisini bul
-                        year_match = re.search(r'\b(19|20)\d{2}\b', full_text)
+                        year_match = re.search(r'\b(19|20)\d{2}\b', outer_html)
                         year = year_match.group() if year_match else ""
                         
                     except Exception as e:
                         print(f"Yayın yeri/yıl ayrıştırma hatası: {e}")
                         publication_info = ""
                         year = ""
+                    
+                    # Tür bilgisi
+                    try:
+                        span_tags = second_td.find_elements(By.XPATH, './/p[2]/span')
+                        types = []
+                        if len(span_tags) > 0:
+                            scope = span_tags[0].text.strip()
+                            if scope:
+                                types.append(scope)
+                        if len(span_tags) > 1:
+                            proc_type = span_tags[1].text.strip()
+                            if proc_type:
+                                types.append(proc_type)
+                        proceeding_type = " | ".join(types)
+                    except Exception as e:
+                        print(f"Tür bilgisi çekme hatası: {e}")
+                        proceeding_type = ""
                     
                     proceeding_info = {
                         'title': title,
@@ -497,11 +462,6 @@ class YOKScraper:
                     proceedings.append(proceeding_info)
                     
                     pbar.set_description(f"Bildiri işleniyor: {title[:30]}...")
-                    
-                    # Her 100 bildiriden sonra belleği temizle
-                    if len(proceedings) % 100 == 0:
-                        import gc
-                        gc.collect()
                     
                 except Exception as e:
                     print(f"Bildiri bilgisi çekilirken hata: {e}")
@@ -837,4 +797,4 @@ class YOKScraper:
                 
             print(f"JSON dosyası başarıyla oluşturuldu: {file_path}")
         except Exception as e:
-            print(f"JSON dosyası kaydedilemedi: {e}") 
+            print(f"JSON dosyası kaydedilemedi: {e}")  
