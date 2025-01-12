@@ -20,7 +20,7 @@ def print_banner():
     print(Fore.RED + f.renderText('YOK WEB'))
     print(Fore.GREEN + f.renderText('SCRAPER'))
     print(Fore.CYAN + "=" * 70)
-    print(Fore.YELLOW + "\n" + " " * 20 + "YÖK Akademik Veri Çekme Aracı v1.3.2" + "\n")
+    print(Fore.YELLOW + "\n" + " " * 20 + "YÖK Akademik Veri Çekme Aracı v1.4.0" + "\n")
 
 def main():
     try:
