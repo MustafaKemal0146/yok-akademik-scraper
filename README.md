@@ -155,7 +155,7 @@ Word dokümanı aşağıdaki bölümleri içerir:
   - Öğrenim bilgileri formatı iyileştirildi
   - Bildiri türü ve sunum şekli ayrı gösterim özelliği eklendi
   - Genel performans iyileştirmeleri yapıldı
-- v1.4.0 (2024-03): Kapsamlı Veri Çekimi Güncellemesi
+- v1.4.0 (2024-04): Kapsamlı Veri Çekimi Güncellemesi
   - Verilen dersler çekme özelliği eklendi
   - Önlisans, lisans ve yüksek lisans dersleri ayrı ayrı listeleme
   - Ders detayları (dönem, ders adı, dili, saat) ayrıştırma
