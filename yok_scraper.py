@@ -709,14 +709,9 @@ class YOKScraper:
             return []
 
     def scrape_all(self):
-        """
-        Tüm akademik bilgileri belirtilen sırada çeker ve sonuçları döndürür
-        Returns:
-            dict: Tüm akademik bilgileri içeren sözlük
-        """
         try:
             self.setup_driver()
-            total_steps = 5
+            total_steps = 6  # Proje için +1
             with tqdm(total=total_steps, desc="Veriler çekiliyor", colour="green") as pbar:
                 try:
                     pbar.set_description("Akademik bilgiler çekiliyor")
@@ -735,11 +730,16 @@ class YOKScraper:
                     proceedings = self.get_proceedings()
                     pbar.update(1)
                     
+                    pbar.set_description("Projeler çekiliyor")
+                    projects = self.get_projects()
+                    pbar.update(1)
+                    
                     results = {
                         'academic_info': academic_info,
                         'books': books,
                         'articles': articles,
-                        'proceedings': proceedings
+                        'proceedings': proceedings,
+                        'projects': projects
                     }
                     
                     pbar.set_description("İşlem tamamlandı!")
@@ -781,7 +781,26 @@ class YOKScraper:
             doc.add_heading('Öğrenim Bilgileri', level=1)
             if 'education' in data['academic_info']:
                 for edu in data['academic_info']['education']:
-                    doc.add_paragraph(edu)
+                    # Öğrenim bilgisini parçalara ayır
+                    parts = edu.split(' - ')
+                    if len(parts) >= 4:
+                        year = parts[0]
+                        degree = parts[1]
+                        institution = parts[2]
+                        department = parts[3]
+                        thesis = parts[4] if len(parts) > 4 else None
+
+                        p = doc.add_paragraph()
+                        p.add_run(f"{institution}").bold = True
+                        p.add_run(f"\n{department}")
+                        p.add_run(f"\n{degree}")
+                        p.add_run(f"\n{year}")
+                        if thesis:
+                            p.add_run(f"\n{thesis}")
+                        doc.add_paragraph()  # Boş satır ekle
+                    else:
+                        # Parçalama başarısız olursa orijinal formatı kullan
+                        doc.add_paragraph(edu)
             doc.add_page_break()
         
         # 2. Akademik Görevler
@@ -849,6 +868,20 @@ class YOKScraper:
                     
                 doc.add_paragraph()
         
+        # Projeler
+        if 'projects' in data and data['projects']:
+            doc.add_heading('Projeler', level=1)
+            for project in data['projects']:
+                p = doc.add_paragraph()
+                p.add_run(f"Proje Adı: {project['title']}").bold = True
+                p.add_run(f"\nKatkısı Geçenler: {project['contributors']}")
+                p.add_run(f"\nProjenin Başlangıç ve Bitiş Tarihi: {project['dates']}")
+                p.add_run(f"\nProjenin Yürütüldüğü Yer: {project['institution']}")
+                p.add_run(f"\nSüreç: {project['status']}")
+                p.add_run(f"\nKullanılan Bütçe: {project['budget']}")
+                doc.add_paragraph()
+            doc.add_page_break()
+        
         # Dosyayı kaydet
         doc.save(filename)
         print(f"Word dosyası başarıyla oluşturuldu: {filename}")
@@ -871,7 +904,8 @@ class YOKScraper:
                 },
                 'books': data.get('books', []),
                 'articles': data.get('articles', []),
-                'proceedings': data.get('proceedings', [])
+                'proceedings': data.get('proceedings', []),
+                'projects': data.get('projects', [])
             }
             
             # Dosyayı çalışılan dizine kaydet
@@ -885,3 +919,82 @@ class YOKScraper:
             print(f"JSON dosyası başarıyla oluşturuldu: {file_path}")
         except Exception as e:
             print(f"JSON dosyası kaydedilemedi: {e}")  
+
+    def get_projects(self):
+        """
+        Akademisyenin projelerini çeker
+        Returns:
+            list: Proje bilgilerini içeren liste
+        """
+        try:
+            # Projeler sekmesine tıkla
+            projects_tab = self.wait.until(EC.element_to_be_clickable(
+                (By.CSS_SELECTOR, "li#projectMenu a")))
+            projects_tab.click()
+            
+            # Projelerin yüklenmesini bekle
+            self.wait.until(EC.presence_of_element_located(
+                (By.CSS_SELECTOR, "div.projectmain")))
+            
+            projects = []
+            
+            # Proje elementlerini bul
+            project_elements = self.driver.find_elements(
+                By.CSS_SELECTOR, 
+                "div.projectmain"
+            )
+            
+            pbar = tqdm(project_elements, desc="Projeler çekiliyor", unit="proje", colour="green")
+            
+            for project in pbar:
+                try:
+                    # Proje başlığı
+                    title = project.find_element(By.CSS_SELECTOR, "span.baslika strong").text.strip()
+                    
+                    # Proje katılımcıları
+                    contributors = []
+                    contributor_elements = project.find_elements(By.CSS_SELECTOR, "a.popoverData")
+                    for contributor in contributor_elements:
+                        contributors.append(contributor.text.strip())
+                    
+                    # Proje detayları
+                    project_type_div = project.find_element(By.CSS_SELECTOR, "div.projectType")
+                    type_text = project_type_div.text.strip()
+                    
+                    # Detayları parçala
+                    details = type_text.split(',')
+                    
+                    # Kurum ve tür bilgisi
+                    institution_spans = project_type_div.find_elements(By.CSS_SELECTOR, "span.label")
+                    institution = institution_spans[0].text.strip() if len(institution_spans) > 0 else ""
+                    project_type = institution_spans[1].text.strip() if len(institution_spans) > 1 else ""
+                    status = institution_spans[2].text.strip() if len(institution_spans) > 2 else ""
+                    
+                    # Tarih bilgisi
+                    dates = details[1].strip() if len(details) > 1 else ""
+                    
+                    # Bütçe bilgisi
+                    budget = f"{details[2].strip()} {details[3].strip()}" if len(details) > 3 else "Belirtilmemiş"
+                    
+                    project_info = {
+                        'title': title,
+                        'contributors': ', '.join(contributors),
+                        'institution': institution,
+                        'project_type': project_type,
+                        'status': status,
+                        'dates': dates,
+                        'budget': budget
+                    }
+                    
+                    projects.append(project_info)
+                    pbar.set_description(f"Proje işleniyor: {title[:30]}...")
+                    
+                except Exception as e:
+                    print(Fore.RED + f"HATA: Proje bilgisi çekilemedi: {e}")
+                    continue
+                
+            return projects
+            
+        except Exception as e:
+            print(Fore.RED + f"Projeler çekilirken hata: {e}")
+            return []  
