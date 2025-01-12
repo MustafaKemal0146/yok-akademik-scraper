@@ -149,4 +149,8 @@ Bu projeyi geliştirirken kullanılan açık kaynak kütüphanelerin geliştiric
 - BeautifulSoup4
 - python-docx
 - pandas
-- ve diğerleri... 
+- ve diğerleri...
+
+Ve ayrıca bu proje fikrini veren ve geliştirmemde yardımcı olan Doçent Doktor Musa ÇIBUK hocama teşekkür ederim.
+
+ 
