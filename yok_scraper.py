@@ -3,6 +3,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from bs4 import BeautifulSoup
+from tqdm import tqdm
+from colorama import Fore, Style, init
 import time
 import pandas as pd
 from fpdf import FPDF
@@ -632,16 +634,95 @@ class YOKScraper:
 
         return books
 
+    def fetch_articles(self):
+        """Makaleleri çeker"""
+        try:
+            wait = WebDriverWait(self.driver, 10)
+            
+            # "Makaleler" linkine tıklayın
+            articles_link = wait.until(
+                EC.element_to_be_clickable((By.CSS_SELECTOR, 'li#articleMenu a'))
+            )
+            articles_link.click()
+
+            # İlk tablonun yüklenmesini bekleyin
+            wait.until(
+                EC.presence_of_element_located((By.XPATH, '(//table)[1]/tbody'))
+            )
+            
+            # İlk tablodaki makaleleri çekin
+            articles = []
+            rows = self.driver.find_elements(By.XPATH, '(//table)[1]/tbody/tr')
+            pbar = tqdm(rows, desc="Makaleler işleniyor", unit="makale", colour="green")
+            
+            for idx, row in enumerate(pbar):
+                try:
+                    # Makale numarası
+                    first_td = row.find_elements(By.XPATH, './/td')[0]
+                    p_no = first_td.text.strip() if first_td else 'N/A'
+                    
+                    # Makale detayları
+                    second_td = row.find_elements(By.XPATH, './/td')[1]
+                    outer_html = second_td.get_attribute('outerHTML')
+                    title_tag = second_td.find_element(By.XPATH, './/a[@data-toggle="modal"]')
+                    p_title = title_tag.text.strip()
+
+                    # İçerik ayrıştırma
+                    p_content = outer_html.split('<p></p>')[1].split('<p>')[0].strip()
+                    parts = p_content.replace('\n, ', ' , ').split(' , ')
+                    p_authors_html = parts[0].strip() if len(parts) > 0 else 'N/A'
+                    p_event = parts[1].strip().replace('Yayın Yeri:', '').strip() if len(parts) > 1 else 'N/A'
+                    p_year_info = parts[2].strip() if len(parts) > 2 else 'N/A'
+
+                    # Yazarları ayır
+                    soup = BeautifulSoup(p_authors_html, 'html.parser')
+                    p_authors = [author.strip() for author in soup.get_text().split(',')]
+
+                    # Etiketleri al
+                    span_tags = second_td.find_elements(By.XPATH, './/p[2]/span')
+                    p_scope = span_tags[0].text.strip() if len(span_tags) > 0 else 'N/A'
+                    p_type = span_tags[1].text.strip() if len(span_tags) > 1 else 'N/A'
+                    p_index = span_tags[2].text.strip() if len(span_tags) > 2 else 'N/A'
+                    p_article_type = span_tags[3].text.strip() if len(span_tags) > 3 else 'N/A'
+                    
+                    # DOI bilgisi
+                    doi_tags = second_td.find_elements(By.XPATH, './/p[2]/a')
+                    p_doi = doi_tags[0].get_attribute('href') if doi_tags else 'N/A'
+
+                    # Makale bilgilerini ekle
+                    articles.append({
+                        'no': p_no,
+                        'title': p_title,
+                        'authors': p_authors,
+                        'publication': p_event,
+                        'year': p_year_info,
+                        'scope': p_scope,
+                        'type': p_type,
+                        'index': p_index,
+                        'article_type': p_article_type,
+                        'doi': p_doi
+                    })
+                    pbar.set_description(f"Makale işleniyor: {p_title[:30]}...")
+                    
+                except Exception as e:
+                    print(Fore.RED + f"HATA: Makale çekilemedi! (Article {idx + 1:2d}): {e}")
+
+            return articles
+            
+        except Exception as e:
+            print(Fore.RED + f"Bir hata oluştu: {e}")
+            return []
+
     def scrape_all(self):
         """
-        Tüm akademik bilgileri çeker ve sonuçları döndürür
+        Tüm akademik bilgileri belirtilen sırada çeker ve sonuçları döndürür
         Returns:
             dict: Tüm akademik bilgileri içeren sözlük
         """
         try:
             self.setup_driver()
-            total_steps = 4  # 6'dan 4'e düşürüldü (Word ve JSON kaydı çıkarıldı)
-            with tqdm(total=total_steps, desc="Veriler çekiliyor") as pbar:
+            total_steps = 5
+            with tqdm(total=total_steps, desc="Veriler çekiliyor", colour="green") as pbar:
                 try:
                     pbar.set_description("Akademik bilgiler çekiliyor")
                     academic_info = self.get_academic_info()
@@ -652,7 +733,7 @@ class YOKScraper:
                     pbar.update(1)
                     
                     pbar.set_description("Makaleler çekiliyor")
-                    articles = self.get_articles()
+                    articles = self.fetch_articles()
                     pbar.update(1)
                     
                     pbar.set_description("Bildiriler çekiliyor")
@@ -670,7 +751,7 @@ class YOKScraper:
                     return results
                     
                 except Exception as e:
-                    print(f"Veri çekme hatası: {e}")
+                    print(Fore.RED + f"Veri çekme hatası: {e}")
                     pbar.update(total_steps - pbar.n)
                     return None
         finally:
@@ -679,7 +760,7 @@ class YOKScraper:
 
     def save_to_word(self, data, filename='academic_info.docx'):
         """
-        Verileri Word dosyasına kaydeder
+        Verileri Word dosyasına belirtilen sırada kaydeder
         Args:
             data: Kaydedilecek veriler
             filename: Kaydedilecek dosya adı
@@ -700,22 +781,23 @@ class YOKScraper:
         font.name = 'Arial'
         font.size = Pt(11)
         
-        # Akademik Görevler
+        # 1. Öğrenim Bilgileri
         if 'academic_info' in data and data['academic_info']:
-            doc.add_heading('Akademik Görevler', level=1)
-            if 'duties' in data['academic_info']:
-                for duty in data['academic_info']['duties']:
-                    doc.add_paragraph(duty)
-            doc.add_page_break()
-            
-            # Öğrenim Bilgileri (ayrı sayfada)
             doc.add_heading('Öğrenim Bilgileri', level=1)
             if 'education' in data['academic_info']:
                 for edu in data['academic_info']['education']:
                     doc.add_paragraph(edu)
             doc.add_page_break()
         
-        # Kitaplar (ayrı sayfada)
+        # 2. Akademik Görevler
+        if 'academic_info' in data and data['academic_info']:
+            doc.add_heading('Akademik Görevler', level=1)
+            if 'duties' in data['academic_info']:
+                for duty in data['academic_info']['duties']:
+                    doc.add_paragraph(duty)
+            doc.add_page_break()
+        
+        # 3. Kitaplar
         if 'books' in data and data['books']:
             doc.add_heading('Kitaplar', level=1)
             for book in data['books']:
@@ -734,23 +816,25 @@ class YOKScraper:
                 doc.add_paragraph()
             doc.add_page_break()
         
-        # Makaleler
+        # 4. Makaleler
         if 'articles' in data and data['articles']:
             doc.add_heading('Makaleler', level=1)
             for article in data['articles']:
                 p = doc.add_paragraph()
                 p.add_run(f"Başlık: {article['title']}").bold = True
-                p.add_run(f"\nYazarlar: {article['authors']}")
-                p.add_run(f"\nYayın Yeri: {article['publication_place']}")
+                p.add_run(f"\nYazarlar: {', '.join(article['authors'])}")
+                p.add_run(f"\nYayın Yeri: {article['publication']}")
                 p.add_run(f"\nYıl: {article['year']}")
-                if 'labels' in article:
-                    p.add_run(f"\nEtiketler: {', '.join(article['labels'])}")
-                if 'doi' in article and article['doi']:
+                p.add_run(f"\nKapsam: {article['scope']}")
+                p.add_run(f"\nTür: {article['type']}")
+                p.add_run(f"\nİndeks: {article['index']}")
+                p.add_run(f"\nMakale Türü: {article['article_type']}")
+                if article['doi'] != 'N/A':
                     p.add_run(f"\nDOI: {article['doi']}")
                 doc.add_paragraph()
             doc.add_page_break()
         
-        # Bildiriler
+        # 5. Bildiriler
         if 'proceedings' in data and data['proceedings']:
             doc.add_heading('Bildiriler', level=1)
             for proc in data['proceedings']:
