@@ -1,4 +1,4 @@
-# YÖK Akademik Veri Çekme Aracı v1.2.0
+# YÖK Akademik Web Scraper v1.3.0
 
 Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olarak çeken ve düzenli bir Word dokümanı ve JSON olarak kaydeden bir Python uygulamasıdır.
 
@@ -18,7 +18,7 @@ Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olar
 - JSON formatında veri çıktısı
 - Geliştirilmiş yazar bilgisi çekimi
 - Daha doğru bildiri ve makale ayrıştırma
-- Renkli konsol çıktıları
+- Renkli konsol çıktıları ve banner tasarımı
 
 ## 📋 Gereksinimler
 
@@ -123,6 +123,12 @@ Word dokümanı aşağıdaki bölümleri içerir:
   - BeautifulSoup ile daha doğru HTML ayrıştırma
   - Renkli konsol çıktıları eklendi
   - Bildiri ve makale ayrıştırma mantığı iyileştirildi
+- v1.3.0 (2024-03): Arayüz Geliştirmeleri
+  - Renkli banner tasarımı eklendi
+  - Konsol arayüzü yenilendi
+  - İlerleme çubukları renklendi
+  - Hata mesajları renklendirildi
+  - Genel performans iyileştirmeleri yapıldı
 
 ## 🤝 Katkıda Bulunma
 
