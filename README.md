@@ -1,4 +1,4 @@
-# YÖK Akademik Web Scraper v1.3.2
+# YÖK Akademik Web Scraper v1.4.0
 
 Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olarak çeken ve düzenli bir Word dokümanı ve JSON olarak kaydeden bir Python uygulamasıdır.
 
@@ -154,6 +154,17 @@ Word dokümanı aşağıdaki bölümleri içerir:
   - JSON çıktısına projeler dahil edildi
   - Öğrenim bilgileri formatı iyileştirildi
   - Bildiri türü ve sunum şekli ayrı gösterim özelliği eklendi
+  - Genel performans iyileştirmeleri yapıldı
+- v1.4.0 (2024-03): Kapsamlı Veri Çekimi Güncellemesi
+  - Verilen dersler çekme özelliği eklendi
+  - Önlisans, lisans ve yüksek lisans dersleri ayrı ayrı listeleme
+  - Ders detayları (dönem, ders adı, dili, saat) ayrıştırma
+  - Word raporuna dersler bölümü eklendi
+  - JSON çıktısına dersler dahil edildi
+  - Her eğitim seviyesi için ayrı tablo formatı
+  - Otomatik sekme geçişleri eklendi
+  - Veri çekme sırası optimize edildi
+  - Hata yönetimi geliştirildi
   - Genel performans iyileştirmeleri yapıldı
 
 ## 🤝 Katkıda Bulunma
