@@ -1,6 +1,6 @@
-# YÖK Akademik Veri Çekme Aracı v1.1.0
+# YÖK Akademik Veri Çekme Aracı v1.2.0
 
-Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olarak çeken ve düzenli bir Word dokümanı ve Json olarak kaydeden bir Python uygulamasıdır.
+Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olarak çeken ve düzenli bir Word dokümanı ve JSON olarak kaydeden bir Python uygulamasıdır.
 
 ## 🚀 Özellikler
 
@@ -15,6 +15,10 @@ Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olar
 - İlerleme çubuğu ile işlem takibi
 - Optimize edilmiş veri çekme hızı
 - Geliştirilmiş hata yönetimi
+- JSON formatında veri çıktısı
+- Geliştirilmiş yazar bilgisi çekimi
+- Daha doğru bildiri ve makale ayrıştırma
+- Renkli konsol çıktıları
 
 ## 📋 Gereksinimler
 
@@ -37,17 +41,19 @@ pip install -r requirements.txt
 
 ## 🎯 Kullanım
 
-1. `main.py` dosyasında akademisyenin YÖK Akademik URL'sini belirtin:
-```python
-url = "https://akademik.yok.gov.tr/AkademikArama/AkademisyenGorevOgrenimBilgileri?islem=direct&authorId=XXXXXXXXXXXX"
-```
+1. Programı iki şekilde çalıştırabilirsiniz:
 
-2. Programı çalıştırın:
 ```bash
+# 1. URL'yi doğrudan komut satırından vererek:
+python main.py https://akademik.yok.gov.tr/AkademikArama/AkademisyenGorevOgrenimBilgileri?islem=direct&authorId=XXXXXXXXXXXX
+
+# 2. Program içinden URL girerek:
 python main.py
 ```
 
-3. Program otomatik olarak verileri çekecek ve `academic_info.docx` adında bir Word dosyası oluşturacaktır.
+2. Program otomatik olarak verileri çekecek ve iki dosya oluşturacaktır:
+   - `academic_info.docx`: Word formatında rapor
+   - `academic_info.json`: JSON formatında yapılandırılmış veri
 
 ## 📄 Çıktı Formatı
 
@@ -94,6 +100,8 @@ Word dokümanı aşağıdaki bölümleri içerir:
 - Çok sayıda istek atılması durumunda YÖK Akademik geçici olarak erişimi kısıtlayabilir
 - Progress bar sayesinde işlemin hangi aşamada olduğunu takip edebilirsiniz
 - Optimize edilmiş yapı sayesinde daha hızlı veri çekimi yapılmaktadır
+- JSON çıktısı sayesinde veriler başka sistemlerde de kullanılabilir
+- Renkli konsol çıktıları ile işlem durumu daha net görülebilir
 
 ## 🔄 Güncelleme Geçmişi
 
@@ -109,6 +117,12 @@ Word dokümanı aşağıdaki bölümleri içerir:
   - Gereksiz resim yüklemeleri devre dışı bırakıldı
   - Bekleme süreleri optimize edildi
   - Daha detaylı konsol çıktıları eklendi
+- v1.2.0 (2024-02): Veri Çekimi İyileştirmeleri
+  - JSON formatında veri çıktısı eklendi
+  - Yazar bilgisi çekimi geliştirildi
+  - BeautifulSoup ile daha doğru HTML ayrıştırma
+  - Renkli konsol çıktıları eklendi
+  - Bildiri ve makale ayrıştırma mantığı iyileştirildi
 
 ## 🤝 Katkıda Bulunma
 
