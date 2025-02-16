@@ -2,6 +2,8 @@
 
 Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olarak çeken ve düzenli bir Word dokümanı ve JSON olarak kaydeden bir Python uygulamasıdır.
 
+[![Hits](https://hits.sh/github.com/MustafaKemal0146/yok-akademik-scraper.svg?style=for-the-badge&color=0089e9)](https://hits.sh/github.com/MustafaKemal0146/yok-akademik-scraper/)
+
 ## 🚀 Özellikler
 
 - Akademik görev bilgilerini çekme
