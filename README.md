@@ -1,6 +1,6 @@
-# YÖK Akademik Web Scraper v1.4.0
+# YÖK Akademik Web Scraper FİNAL
 
-Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olarak çeken ve düzenli bir Word dokümanı ve JSON olarak kaydeden bir Python uygulamasıdır.
+Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olarak çeken ve JSON formatında kaydeden bir Python uygulamasıdır.
 
 [![Hits](https://hits.sh/github.com/MustafaKemal0146/yok-akademik-scraper.svg?style=for-the-badge&color=0089e9)](https://hits.sh/github.com/MustafaKemal0146/yok-akademik-scraper/)
 
@@ -11,7 +11,17 @@ Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olar
 - Yayınlanmış kitapları listeleme
 - Akademik makaleleri detaylı bilgileriyle çekme
 - Konferans bildirilerini listeleme
-- Tüm bilgileri düzenli bir Word dokümanı olarak kaydetme
+- Proje bilgilerini çekme
+- Verilen dersleri çekme
+- İdari görevleri çekme
+- Üniversite dışı deneyimleri çekme
+- Alınan ödülleri çekme
+- Üyelik bilgilerini çekme
+- Patent bilgilerini çekme
+- Yönetilen tezleri çekme
+- Sanatsal aktiviteleri çekme
+- Sonsuz mod ile birlikte çalışılan kişilerin verilerini çekme
+- Tüm bilgileri düzenli bir Word dokümanı ve JSON olarak kaydetme
 - Her kategoriyi ayrı sayfalarda gösterme
 - Otomatik Chrome driver yönetimi
 - İlerleme çubuğu ile işlem takibi
@@ -53,13 +63,18 @@ python main.py https://akademik.yok.gov.tr/AkademikArama/AkademisyenGorevOgrenim
 python main.py
 ```
 
-2. Program otomatik olarak verileri çekecek ve iki dosya oluşturacaktır:
-   - `academic_info.docx`: Word formatında rapor
+2. Program otomatik olarak verileri çekecek ve JSON formatında bir dosya oluşturacaktır:
    - `academic_info.json`: JSON formatında yapılandırılmış veri
+
+3. Program çalıştırıldığında aşağıdaki seçenekler sunulacaktır:
+   - **1. YÖK Akademik ID ile arama**: Doğrudan bir YÖK Akademik ID girerek veri çekme işlemi başlatılır.
+   - **2. YÖK Akademik URL ile arama**: Bir YÖK Akademik URL'si girerek veri çekme işlemi başlatılır.
+   - **3. Sonsuz Mod**: Başlangıç olarak bir YÖK Akademik ID girilir ve bu ID'ye bağlı tüm işbirlikçilerin verileri de çekilir. (sadece id ile arama)
+   - **4. Çıkış**: Programdan çıkılır.
 
 ## 📄 Çıktı Formatı
 
-Word dokümanı aşağıdaki bölümleri içerir:
+JSON dosyası aşağıdaki bölümleri içerir:
 
 1. **Akademik Görevler**
    - Tarih
@@ -94,6 +109,67 @@ Word dokümanı aşağıdaki bölümleri içerir:
    - Yıl
    - Tür
 
+6. **Projeler**
+   - Başlık
+   - Katılımcılar
+   - Yer
+   - Tür
+   - Durum
+   - Süre
+   - Bütçe
+   - Özet
+
+7. **Dersler**
+   - Dönem
+   - Ders Adı
+   - Dil
+   - Saat
+
+8. **İdari Görevler**
+   - Yıl
+   - Pozisyon
+   - Kurum
+   - Bölüm
+
+9. **Üniversite Dışı Deneyimler**
+   - Yıl
+   - Sektör
+   - Kurum
+   - Pozisyon
+
+10. **Ödüller**
+    - Yıl
+    - Başlık
+    - Kurum
+    - Tür
+    - Ülke
+
+11. **Üyelikler**
+    - Organizasyon
+    - Pozisyon
+    - Yıl
+
+12. **Patentler**
+    - Başlık
+    - Başvuru Sahipleri
+    - Buluş Sahipleri
+    - Tür
+    - Sınıf
+    - Özet
+
+13. **Tezler**
+    - Yıl
+    - Yazar
+    - Başlık
+    - Üniversite
+
+14. **Sanatsal Aktiviteler**
+    - Tür
+    - Başlık
+    - Yer
+    - Düzenleyen(ler)
+    - Tarih
+
 ## ⚠️ Önemli Notlar
 
 - Program Chrome tarayıcısını arka planda çalıştırır
@@ -104,70 +180,6 @@ Word dokümanı aşağıdaki bölümleri içerir:
 - Optimize edilmiş yapı sayesinde daha hızlı veri çekimi yapılmaktadır
 - JSON çıktısı sayesinde veriler başka sistemlerde de kullanılabilir
 - Renkli konsol çıktıları ile işlem durumu daha net görülebilir
-
-## 🔄 Güncelleme Geçmişi
-
-- v1.0.0 (2024-01): İlk sürüm
-  - Temel veri çekme özellikleri
-  - Word dokümanı oluşturma
-  - Hata yönetimi
-- v1.1.0 (2024-02): Performans Güncellemesi
-  - Progress bar eklendi (işlem durumu gösterimi)
-  - Chrome tarayıcı optimizasyonları yapıldı
-  - Veri çekme hızı artırıldı
-  - Yayın yeri ve yıl bilgisi çekimi iyileştirildi
-  - Gereksiz resim yüklemeleri devre dışı bırakıldı
-  - Bekleme süreleri optimize edildi
-  - Daha detaylı konsol çıktıları eklendi
-- v1.2.0 (2024-02): Veri Çekimi İyileştirmeleri
-  - JSON formatında veri çıktısı eklendi
-  - Yazar bilgisi çekimi geliştirildi
-  - BeautifulSoup ile daha doğru HTML ayrıştırma
-  - Renkli konsol çıktıları eklendi
-  - Bildiri ve makale ayrıştırma mantığı iyileştirildi
-- v1.3.0 (2024-03): Arayüz ve Performans Geliştirmeleri
-  - Renkli banner tasarımı eklendi
-  - Terminal ekranı otomatik temizleme özelliği eklendi
-  - Bildiri türü ve sunum şekli ayrı gösterim özelliği eklendi
-  - Context manager (with statement) desteği eklendi
-  - Chrome driver optimizasyonları yapıldı
-  - Sayfa yükleme stratejisi iyileştirildi
-  - Bellek kullanımı optimize edildi
-  - Konsol arayüzü yenilendi
-  - İlerleme çubukları renklendi
-  - Hata mesajları renklendirildi
-  - Genel performans iyileştirmeleri yapıldı
-- v1.3.1 (2024-03): Arayüz ve Performans Geliştirmeleri
-  - Renkli banner tasarımı eklendi
-  - Terminal ekranı otomatik temizleme özelliği eklendi
-  - Bildiri türü ve sunum şekli ayrı gösterim özelliği eklendi
-  - Context manager (with statement) desteği eklendi
-  - Chrome driver optimizasyonları yapıldı
-  - Sayfa yükleme stratejisi iyileştirildi
-  - Bellek kullanımı optimize edildi
-  - Konsol arayüzü yenilendi
-  - İlerleme çubukları renklendi
-  - Hata mesajları renklendirildi
-  - Genel performans iyileştirmeleri yapıldı
-- v1.3.2 (2024-03): Veri Çekme İyileştirmeleri
-  - Proje bilgileri çekme özelliği eklendi
-  - Proje detayları (başlık, katılımcılar, tarih, bütçe vb.) ayrıştırma
-  - Word raporuna projeler bölümü eklendi
-  - JSON çıktısına projeler dahil edildi
-  - Öğrenim bilgileri formatı iyileştirildi
-  - Bildiri türü ve sunum şekli ayrı gösterim özelliği eklendi
-  - Genel performans iyileştirmeleri yapıldı
-- v1.4.0 (2024-04): Kapsamlı Veri Çekimi Güncellemesi
-  - Verilen dersler çekme özelliği eklendi
-  - Önlisans, lisans ve yüksek lisans dersleri ayrı ayrı listeleme
-  - Ders detayları (dönem, ders adı, dili, saat) ayrıştırma
-  - Word raporuna dersler bölümü eklendi
-  - JSON çıktısına dersler dahil edildi
-  - Her eğitim seviyesi için ayrı tablo formatı
-  - Otomatik sekme geçişleri eklendi
-  - Veri çekme sırası optimize edildi
-  - Hata yönetimi geliştirildi
-  - Genel performans iyileştirmeleri yapıldı
 
 ## 🤝 Katkıda Bulunma
 
