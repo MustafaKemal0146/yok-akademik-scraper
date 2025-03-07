@@ -35,7 +35,7 @@ Bu proje, YÖK Akademik platformundan akademisyenlerin bilgilerini otomatik olar
 ## 📋 Gereksinimler
 
 - Python 3.8 veya üzeri
-- Google Chrome tarayıcısı
+- Google Chrome yada Edge tarayıcısı
 - İnternet bağlantısı
 
 ## ⚙️ Kurulum
