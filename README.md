@@ -170,6 +170,54 @@ JSON dosyası aşağıdaki bölümleri içerir:
     - Düzenleyen(ler)
     - Tarih
 
+## 🔄 Sonsuz Mod ve Derinlik Sınırlaması
+
+YÖK Akademik Veri Çekme Aracı, "Sonsuz Mod" özelliği ile akademisyenler arasındaki işbirliği ağını otomatik olarak keşfedebilir. Bu mod, belirtilen bir akademisyenden başlayarak, onun işbirlikçilerini ve işbirlikçilerinin işbirlikçilerini belirli bir derinliğe kadar tarar.
+
+### Akademik Ağ Örneği
+
+Akademisyenler arasındaki ilişki ağını bir ağaç yapısı olarak düşünelim:
+
+- **Derinlik 0**: A (Başlangıç Akademisyeni)
+- **Derinlik 1**: B, C (A'nın işbirlikçileri)
+- **Derinlik 2**: D, E, F, G (B ve C'nin işbirlikçileri)
+- **Derinlik 3**: H, I (D'nin işbirlikçileri)
+
+Görsel olarak:
+- A, başlangıç noktasıdır
+- A → B ve A → C bağlantıları vardır (derinlik 1)
+- B → D, B → E, C → F, C → G bağlantıları vardır (derinlik 2)
+- D → H, D → I bağlantıları vardır (derinlik 3)
+
+### Derinlik Sınırlamasının Çalışma Şekli
+
+Programda derinlik sınırlaması şöyle çalışır:
+
+1. **Derinlik 0**: Sadece başlangıç akademisyeni (A) için veri çekilir
+2. **Derinlik 1**: Başlangıç akademisyeni (A) ve onun işbirlikçileri (B, C) için veri çekilir
+3. **Derinlik 2**: A, B, C ve B ile C'nin işbirlikçileri (D, E, F, G) için veri çekilir
+4. **Derinlik 3**: Yukarıdakilere ek olarak, D, E, F, G'nin işbirlikçileri için de veri çekilir
+
+### Neden Derinlik Sınırlaması Önemli?
+
+- **Veri Miktarı**: Akademik ağlar genellikle çok geniştir. Her seviyede işbirlikçi sayısı katlanarak artabilir.
+- **İşlem Süresi**: Her akademisyen için veri çekmek zaman alır. Derinlik arttıkça, işlem süresi üstel olarak artar.
+- **Sistem Kaynakları**: Yüksek derinlik değerleri, bilgisayarınızın bellek ve işlemci kaynaklarını zorlayabilir.
+- **Sunucu Yükü**: Çok fazla istek göndermek, YÖK Akademik sunucularına aşırı yük bindirebilir.
+
+### Önerilen Derinlik Değerleri
+
+- **Genel Kullanım**: Derinlik 2, çoğu durumda iyi bir dengedir
+- **Geniş Ağlar**: Derinlik 1, çok sayıda işbirlikçisi olan akademisyenler için
+- **Detaylı Analiz**: Derinlik 3 veya daha fazla, tam bir ağ analizi için (ancak işlem süresi uzun olabilir)
+
+### Sonsuz Mod Kullanımı
+
+Sonsuz Mod'u kullanırken, program size derinlik sınırlaması isteyip istemediğinizi soracaktır:
+
+- **Sınırlama İsterseniz**: Belirttiğiniz derinliğe kadar veri çekilir
+- **Sınırlama İstemezseniz**: Program, tüm bağlantılı akademisyenlerin verilerini çekmeye çalışır (dikkat: bu işlem çok uzun sürebilir ve sistem kaynaklarını tüketebilir)
+
 ## ⚠️ Önemli Notlar
 
 - Program Chrome tarayıcısını arka planda çalıştırır
@@ -209,5 +257,3 @@ Bu projeyi geliştirirken kullanılan açık kaynak kütüphanelerin geliştiric
 - ve diğerleri...
 
 Ve ayrıca bu proje fikrini veren ve geliştirmemde yardımcı olan Doçent Doktor Musa ÇIBUK hocama teşekkür ederim.
-
- 
